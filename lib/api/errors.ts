@@ -27,6 +27,14 @@ export function conflict(
   return NextResponse.json({ errors: [message] }, { status: 409 });
 }
 
+export function unauthorized(message = "Unauthorized"): NextResponse<ApiError> {
+  return NextResponse.json({ errors: [message] }, { status: 401 });
+}
+
+export function forbidden(message = "Forbidden"): NextResponse<ApiError> {
+  return NextResponse.json({ errors: [message] }, { status: 403 });
+}
+
 export function internalError(
   message = "Internal server error",
 ): NextResponse<ApiError> {

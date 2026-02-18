@@ -3,6 +3,7 @@ import { moduleListQuery } from "@/lib/validation/registry";
 import { validationError, internalError } from "@/lib/api/errors";
 import { jsonResponse } from "@/lib/api/response";
 import { findAllModules } from "@/lib/data/modules";
+import { requireAuth } from "@/lib/auth/middleware";
 
 /**
  * GET /v1/modules?namespace=...&provider=...&q=...&offset=0&limit=15
@@ -11,6 +12,9 @@ import { findAllModules } from "@/lib/data/modules";
  */
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAuth(request, "modules:read");
+    if (auth instanceof Response) return auth;
+
     const searchParams = Object.fromEntries(request.nextUrl.searchParams);
     const parsed = moduleListQuery.safeParse(searchParams);
     if (!parsed.success) return validationError(parsed.error.issues);

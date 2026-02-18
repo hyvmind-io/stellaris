@@ -3,6 +3,7 @@ import { providerListQuery } from "@/lib/validation/registry";
 import { validationError, internalError } from "@/lib/api/errors";
 import { jsonResponse } from "@/lib/api/response";
 import { findAllProviders } from "@/lib/data/providers";
+import { requireAuth } from "@/lib/auth/middleware";
 
 /**
  * GET /v1/providers?namespace=...&type=...&q=...&offset=0&limit=15
@@ -11,6 +12,9 @@ import { findAllProviders } from "@/lib/data/providers";
  */
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAuth(request, "providers:read");
+    if (auth instanceof Response) return auth;
+
     const searchParams = Object.fromEntries(request.nextUrl.searchParams);
     const parsed = providerListQuery.safeParse(searchParams);
     if (!parsed.success) return validationError(parsed.error.issues);

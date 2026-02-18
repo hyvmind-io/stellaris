@@ -2,7 +2,9 @@ import type { NextRequest } from "next/server";
 import { notFound, internalError } from "@/lib/api/errors";
 import { binaryResponse } from "@/lib/api/response";
 import { getModuleTarball } from "@/lib/storage/r2";
+import { parseModuleKey } from "@/lib/storage/keys";
 import { incrementModuleDownloads } from "@/lib/data/modules";
+import { requireAuth } from "@/lib/auth/middleware";
 
 /**
  * GET /v1/modules/tarball/[...path]
@@ -13,10 +15,13 @@ import { incrementModuleDownloads } from "@/lib/data/modules";
  *   → R2 key: modules/hashicorp/consul/aws/0.1.0.tar.gz
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> },
 ) {
   try {
+    const auth = await requireAuth(request, "modules:read");
+    if (auth instanceof Response) return auth;
+
     const { path } = await params;
 
     if (!path || path.length === 0) {
@@ -26,6 +31,13 @@ export async function GET(
     // Reconstruct the R2 key from path segments
     const key = path.join("/");
 
+    // Security: Validate the R2 key conforms to the expected module tarball format.
+    // Without this check, a crafted URL could serve arbitrary R2 objects
+    // (e.g., provider zips, SHA256SUMS files, or future internal objects).
+    if (!key.startsWith("modules/") || !key.endsWith(".tar.gz")) {
+      return notFound("Invalid tarball path");
+    }
+
     const object = await getModuleTarball(key);
     if (!object) {
       return notFound("Module tarball not found");
@@ -34,13 +46,14 @@ export async function GET(
     // Try to increment downloads (best-effort, don't fail the request)
     // Path format: modules/{namespace}/{name}/{provider}/{version}.tar.gz
     try {
-      const parts = key.split("/");
-      if (parts.length >= 5 && parts[0] === "modules") {
-        const namespace = parts[1];
-        const name = parts[2];
-        const provider = parts[3];
-        const version = parts[4].replace(".tar.gz", "");
-        await incrementModuleDownloads(namespace, name, provider, version);
+      const parsed = parseModuleKey(key);
+      if (parsed) {
+        await incrementModuleDownloads(
+          parsed.namespace,
+          parsed.name,
+          parsed.provider,
+          parsed.version,
+        );
       }
     } catch {
       // Best-effort — don't fail the download if counter update fails

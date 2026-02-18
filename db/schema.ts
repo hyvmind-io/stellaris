@@ -27,6 +27,11 @@ export const modules = sqliteTable(
     publishedAt: integer("published_at", { mode: "timestamp" })
       .notNull()
       .$defaultFn(() => new Date()),
+    /**
+     * updatedAt mirrors publishedAt — module versions are immutable (publish/delete only).
+     * This field is set once at publish time and never changed. It exists to satisfy
+     * ORM conventions and potential future use if module metadata editing is added.
+     */
     updatedAt: integer("updated_at", { mode: "timestamp" })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -72,6 +77,9 @@ export const providers = sqliteTable(
   ],
 );
 
+// NOTE: The `providers` table intentionally omits `updatedAt`. Provider versions
+// are immutable — once published, only deleted. No metadata editing is supported.
+// If editing is added in the future, add updatedAt with a proper migration.
 export type Provider = typeof providers.$inferSelect;
 export type NewProvider = typeof providers.$inferInsert;
 
@@ -100,6 +108,7 @@ export const providerPlatforms = sqliteTable(
       table.os,
       table.arch,
     ),
+    index("provider_platforms_provider_idx").on(table.providerId),
   ],
 );
 

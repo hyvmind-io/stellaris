@@ -3,6 +3,7 @@ import { moduleLatestParams } from "@/lib/validation/registry";
 import { notFound, validationError, internalError } from "@/lib/api/errors";
 import { jsonResponse } from "@/lib/api/response";
 import { getModuleLatestVersion } from "@/lib/data/modules";
+import { requireAuth } from "@/lib/auth/middleware";
 
 /**
  * GET /v1/modules/:namespace/:name/:system
@@ -10,12 +11,15 @@ import { getModuleLatestVersion } from "@/lib/data/modules";
  * Return the latest version of a specific module.
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   {
     params,
   }: { params: Promise<{ namespace: string; name: string; system: string }> },
 ) {
   try {
+    const auth = await requireAuth(request, "modules:read");
+    if (auth instanceof Response) return auth;
+
     const rawParams = await params;
     const parsed = moduleLatestParams.safeParse(rawParams);
     if (!parsed.success) return validationError(parsed.error.issues);

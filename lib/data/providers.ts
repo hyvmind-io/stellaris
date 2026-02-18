@@ -1,7 +1,8 @@
-import { eq, and, count, like, desc } from "drizzle-orm";
+import { eq, and, count, desc, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { providers, providerPlatforms, gpgPublicKeys } from "@/db/schema";
 import type { Provider, ProviderPlatform, GpgPublicKey } from "@/db/schema";
+import { escapeLike } from "@/lib/utils/sql";
 
 /**
  * Find a specific provider by namespace, type, and version.
@@ -28,8 +29,8 @@ export async function findProvider(
 
 /**
  * Get all versions for a specific provider (namespace/type) with their platforms.
- * Returns the format Terraform CLI expects:
- * [{version, protocols, platforms: [{os, arch}]}]
+ * Optimized: uses a single LEFT JOIN query instead of N+1 queries.
+ * Versions returned in descending order (newest first) per semver convention.
  */
 export async function getProviderVersions(
   namespace: string,
@@ -43,31 +44,46 @@ export async function getProviderVersions(
 > {
   const db = getDb();
 
-  // Get all versions for this provider
-  const providerRows = await db
-    .select()
+  const rows = await db
+    .select({
+      id: providers.id,
+      version: providers.version,
+      protocols: providers.protocols,
+      publishedAt: providers.publishedAt,
+      os: providerPlatforms.os,
+      arch: providerPlatforms.arch,
+    })
     .from(providers)
-    .where(and(eq(providers.namespace, namespace), eq(providers.type, type)));
+    .leftJoin(providerPlatforms, eq(providerPlatforms.providerId, providers.id))
+    .where(and(eq(providers.namespace, namespace), eq(providers.type, type)))
+    .orderBy(desc(providers.publishedAt));
 
-  if (providerRows.length === 0) return [];
+  if (rows.length === 0) return [];
 
-  // For each version, get platforms
-  const result = await Promise.all(
-    providerRows.map(async (prov) => {
-      const platforms = await db
-        .select({ os: providerPlatforms.os, arch: providerPlatforms.arch })
-        .from(providerPlatforms)
-        .where(eq(providerPlatforms.providerId, prov.id));
+  // Group rows by provider version
+  const versionMap = new Map<
+    number,
+    {
+      version: string;
+      protocols: string[];
+      platforms: { os: string; arch: string }[];
+    }
+  >();
 
-      return {
-        version: prov.version,
-        protocols: prov.protocols,
-        platforms,
-      };
-    }),
-  );
+  for (const row of rows) {
+    if (!versionMap.has(row.id)) {
+      versionMap.set(row.id, {
+        version: row.version,
+        protocols: row.protocols,
+        platforms: [],
+      });
+    }
+    if (row.os && row.arch) {
+      versionMap.get(row.id)!.platforms.push({ os: row.os, arch: row.arch });
+    }
+  }
 
-  return result;
+  return Array.from(versionMap.values());
 }
 
 /**
@@ -106,27 +122,27 @@ export async function findProviderPackage(
   const provider = providerResult[0];
   if (!provider) return null;
 
-  // Find the specific platform
-  const platformResult = await db
-    .select()
-    .from(providerPlatforms)
-    .where(
-      and(
-        eq(providerPlatforms.providerId, provider.id),
-        eq(providerPlatforms.os, os),
-        eq(providerPlatforms.arch, arch),
-      ),
-    )
-    .limit(1);
+  // Fetch platform and GPG keys in parallel — both depend only on provider.id
+  const [platformResult, gpgKeys] = await Promise.all([
+    db
+      .select()
+      .from(providerPlatforms)
+      .where(
+        and(
+          eq(providerPlatforms.providerId, provider.id),
+          eq(providerPlatforms.os, os),
+          eq(providerPlatforms.arch, arch),
+        ),
+      )
+      .limit(1),
+    db
+      .select()
+      .from(gpgPublicKeys)
+      .where(eq(gpgPublicKeys.providerId, provider.id)),
+  ]);
 
   const platform = platformResult[0];
   if (!platform) return null;
-
-  // Get GPG public keys
-  const gpgKeys = await db
-    .select()
-    .from(gpgPublicKeys)
-    .where(eq(gpgPublicKeys.providerId, provider.id));
 
   return { provider, platform, gpgKeys };
 }
@@ -274,7 +290,12 @@ export async function findAllProviders(params: {
     conditions.push(eq(providers.type, params.type));
   }
   if (params.q) {
-    conditions.push(like(providers.type, `%${params.q}%`));
+    const escaped = escapeLike(params.q);
+    conditions.push(
+      sql`${providers.type} LIKE ${"%" + escaped + "%"} ESCAPE '\\'` as ReturnType<
+        typeof eq
+      >,
+    );
   }
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
@@ -298,7 +319,8 @@ export async function findAllProviders(params: {
 
 /**
  * Browse providers — returns one entry per unique provider (namespace/type),
- * showing the latest version with platform count. For the browse UI.
+ * showing the latest version with platform count.
+ * Optimized with SQL GROUP BY and batch platform counts.
  */
 export async function browseProviders(params: {
   namespace?: string;
@@ -313,53 +335,81 @@ export async function browseProviders(params: {
   const offset = params.offset ?? 0;
   const limit = params.limit ?? 15;
 
-  const conditions = [];
+  const conditions: ReturnType<typeof eq>[] = [];
   if (params.namespace) {
     conditions.push(eq(providers.namespace, params.namespace));
   }
   if (params.q) {
-    conditions.push(like(providers.type, `%${params.q}%`));
+    const escaped = escapeLike(params.q);
+    conditions.push(
+      sql`${providers.type} LIKE ${"%" + escaped + "%"} ESCAPE '\\'` as ReturnType<
+        typeof eq
+      >,
+    );
   }
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
-  // Get all matching providers, then deduplicate in JS
-  const allRows = await db
-    .select()
+  // Subquery: max published_at per unique (namespace, type)
+  const latestSq = db
+    .select({
+      namespace: providers.namespace,
+      type: providers.type,
+      maxPub: sql<number>`MAX(${providers.publishedAt})`.as("max_pub"),
+    })
     .from(providers)
     .where(where)
-    .orderBy(desc(providers.publishedAt));
+    .groupBy(providers.namespace, providers.type)
+    .as("latest_providers");
 
-  // Deduplicate: keep only the first (latest) version per namespace/type
-  const seen = new Set<string>();
-  const unique: Provider[] = [];
-  for (const row of allRows) {
-    const key = `${row.namespace}/${row.type}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      unique.push(row);
-    }
+  const [pagedRows, totalResult] = await Promise.all([
+    db
+      .select({ provider: providers })
+      .from(providers)
+      .innerJoin(
+        latestSq,
+        and(
+          eq(providers.namespace, latestSq.namespace),
+          eq(providers.type, latestSq.type),
+          sql`${providers.publishedAt} = ${latestSq.maxPub}`,
+        ),
+      )
+      .orderBy(desc(providers.publishedAt))
+      .limit(limit)
+      .offset(offset),
+    db
+      .select({
+        total: sql<number>`COUNT(DISTINCT ${providers.namespace} || '/' || ${providers.type})`,
+      })
+      .from(providers)
+      .where(where),
+  ]);
+
+  const pagedProviders = pagedRows.map((r) => r.provider);
+
+  // Batch platform counts
+  let platformCounts = new Map<number, number>();
+  if (pagedProviders.length > 0) {
+    const providerIds = pagedProviders.map((p) => p.id);
+    const countRows = await db
+      .select({
+        providerId: providerPlatforms.providerId,
+        platformCount: count(),
+      })
+      .from(providerPlatforms)
+      .where(inArray(providerPlatforms.providerId, providerIds))
+      .groupBy(providerPlatforms.providerId);
+
+    platformCounts = new Map(
+      countRows.map((r) => [r.providerId, r.platformCount]),
+    );
   }
 
-  const total = unique.length;
-  const paged = unique.slice(offset, offset + limit);
-
-  // Fetch platform counts for each paged provider
-  const withPlatformCounts = await Promise.all(
-    paged.map(async (prov) => {
-      const platforms = await db
-        .select({ count: count() })
-        .from(providerPlatforms)
-        .where(eq(providerPlatforms.providerId, prov.id));
-      return {
-        ...prov,
-        platformCount: platforms[0]?.count ?? 0,
-      };
-    }),
-  );
-
   return {
-    providers: withPlatformCounts,
-    meta: { offset, limit, total },
+    providers: pagedProviders.map((p) => ({
+      ...p,
+      platformCount: platformCounts.get(p.id) ?? 0,
+    })),
+    meta: { offset, limit, total: totalResult[0]?.total ?? 0 },
   };
 }

@@ -1,7 +1,8 @@
-import { eq, and, desc, sql, count, like } from "drizzle-orm";
+import { eq, and, desc, sql, count } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { modules } from "@/db/schema";
-import type { Module, NewModule } from "@/db/schema";
+import type { Module } from "@/db/schema";
+import { escapeLike } from "@/lib/utils/sql";
 
 /**
  * Find a specific module by namespace, name, provider, and version.
@@ -181,7 +182,12 @@ export async function findAllModules(params: {
     conditions.push(eq(modules.provider, params.provider));
   }
   if (params.q) {
-    conditions.push(like(modules.name, `%${params.q}%`));
+    const escaped = escapeLike(params.q);
+    conditions.push(
+      sql`${modules.name} LIKE ${"%" + escaped + "%"} ESCAPE '\\'` as ReturnType<
+        typeof eq
+      >,
+    );
   }
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
@@ -205,7 +211,7 @@ export async function findAllModules(params: {
 
 /**
  * Browse modules — returns one entry per unique module (namespace/name/provider),
- * showing the latest version. For the browse UI, not for the API.
+ * showing the latest version. Optimized with SQL GROUP BY — no full table scan.
  */
 export async function browseModules(params: {
   namespace?: string;
@@ -221,9 +227,7 @@ export async function browseModules(params: {
   const offset = params.offset ?? 0;
   const limit = params.limit ?? 15;
 
-  // Use a subquery to find the latest version of each unique module
-  // GROUP BY namespace, name, provider → take the row with MAX(published_at)
-  const conditions = [];
+  const conditions: ReturnType<typeof eq>[] = [];
   if (params.namespace) {
     conditions.push(eq(modules.namespace, params.namespace));
   }
@@ -231,35 +235,55 @@ export async function browseModules(params: {
     conditions.push(eq(modules.provider, params.provider));
   }
   if (params.q) {
-    conditions.push(like(modules.name, `%${params.q}%`));
+    const escaped = escapeLike(params.q);
+    conditions.push(
+      sql`${modules.name} LIKE ${"%" + escaped + "%"} ESCAPE '\\'` as ReturnType<
+        typeof eq
+      >,
+    );
   }
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
-  // Get all matching modules, then deduplicate in JS
-  // (D1/SQLite doesn't support window functions well, so we do grouping manually)
-  const allRows = await db
-    .select()
+  // Subquery: find the max published_at per unique (namespace, name, provider)
+  const latestSq = db
+    .select({
+      namespace: modules.namespace,
+      name: modules.name,
+      provider: modules.provider,
+      maxPub: sql<number>`MAX(${modules.publishedAt})`.as("max_pub"),
+    })
     .from(modules)
     .where(where)
-    .orderBy(desc(modules.publishedAt));
+    .groupBy(modules.namespace, modules.name, modules.provider)
+    .as("latest");
 
-  // Deduplicate: keep only the first (latest) version per namespace/name/provider
-  const seen = new Set<string>();
-  const unique: Module[] = [];
-  for (const row of allRows) {
-    const key = `${row.namespace}/${row.name}/${row.provider}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      unique.push(row);
-    }
-  }
-
-  const total = unique.length;
-  const paged = unique.slice(offset, offset + limit);
+  const [rows, totalResult] = await Promise.all([
+    db
+      .select({ module: modules })
+      .from(modules)
+      .innerJoin(
+        latestSq,
+        and(
+          eq(modules.namespace, latestSq.namespace),
+          eq(modules.name, latestSq.name),
+          eq(modules.provider, latestSq.provider),
+          sql`${modules.publishedAt} = ${latestSq.maxPub}`,
+        ),
+      )
+      .orderBy(desc(modules.publishedAt))
+      .limit(limit)
+      .offset(offset),
+    db
+      .select({
+        total: sql<number>`COUNT(DISTINCT ${modules.namespace} || '/' || ${modules.name} || '/' || ${modules.provider})`,
+      })
+      .from(modules)
+      .where(where),
+  ]);
 
   return {
-    modules: paged,
-    meta: { offset, limit, total },
+    modules: rows.map((r) => r.module),
+    meta: { offset, limit, total: totalResult[0]?.total ?? 0 },
   };
 }

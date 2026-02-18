@@ -3,6 +3,7 @@ import { providerDownloadParams } from "@/lib/validation/registry";
 import { notFound, validationError, internalError } from "@/lib/api/errors";
 import { jsonResponse } from "@/lib/api/response";
 import { findProviderPackage } from "@/lib/data/providers";
+import { requireAuth } from "@/lib/auth/middleware";
 
 /**
  * GET /v1/providers/:namespace/:type/:version/download/:os/:arch
@@ -11,7 +12,7 @@ import { findProviderPackage } from "@/lib/data/providers";
  * ref: https://developer.hashicorp.com/terraform/internals/provider-registry-protocol#find-a-provider-package
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   {
     params,
   }: {
@@ -25,6 +26,9 @@ export async function GET(
   },
 ) {
   try {
+    const auth = await requireAuth(request, "providers:read");
+    if (auth instanceof Response) return auth;
+
     const rawParams = await params;
     const parsed = providerDownloadParams.safeParse(rawParams);
 

@@ -3,6 +3,7 @@ import { providerArtifactParams } from "@/lib/validation/registry";
 import { notFound, validationError, internalError } from "@/lib/api/errors";
 import { binaryResponse } from "@/lib/api/response";
 import { getObject } from "@/lib/storage/r2";
+import { requireAuth } from "@/lib/auth/middleware";
 
 /**
  * GET /v1/providers/:namespace/:type/:version/sha256sums.sig
@@ -11,7 +12,7 @@ import { getObject } from "@/lib/storage/r2";
  * ref: https://developer.hashicorp.com/terraform/internals/provider-registry-protocol
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   {
     params,
   }: {
@@ -19,6 +20,9 @@ export async function GET(
   },
 ) {
   try {
+    const auth = await requireAuth(request, "providers:read");
+    if (auth instanceof Response) return auth;
+
     const rawParams = await params;
     const parsed = providerArtifactParams.safeParse(rawParams);
 

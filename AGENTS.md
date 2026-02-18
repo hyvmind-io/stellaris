@@ -168,3 +168,27 @@ lib/
 - D1 is SQLite — no window functions, limited SQL features.
 - R2 for binary storage. Keys follow patterns in `lib/storage/keys.ts`.
 - `getCloudflareContext()` from `@opennextjs/cloudflare` for bindings access.
+
+## Protected Files — DO NOT MODIFY
+
+The following files contain subtle, hard-won bug fixes. **Sub-agents MUST NOT overwrite, rewrite, or "clean up" these files** unless the task explicitly targets them with a specific bug fix.
+
+### `components/search-input.tsx`
+
+This component has a **carefully designed `useRef` flag pattern** to prevent an infinite refresh loop. The fix was applied twice after regressions caused by agents overwriting the file.
+
+**Why it breaks**: The `SearchInput` uses `useEffect` + `router.push()` + `useSearchParams()`. Naïve implementations create a dependency cycle:
+
+```
+searchParams changes → useCallback recreates → useEffect fires →
+router.push() → searchParams changes → ∞ LOOP
+```
+
+**How the fix works**:
+
+- A `useRef(false)` flag (`isUserInput`) distinguishes user typing from URL sync.
+- The debounce `useEffect` depends ONLY on `[value]` — NOT on `searchParams`, `router`, or any callback.
+- `handleChange`/`handleClear` set `isUserInput.current = true` before calling `setValue`.
+- The URL sync effect (`useEffect([searchParams])`) does NOT set the flag, so it never re-triggers the push.
+
+**If you need to modify search behavior**: Read the entire component first, understand the `useRef` guard, and preserve the pattern. Do NOT refactor to `useCallback` with `searchParams` in deps.

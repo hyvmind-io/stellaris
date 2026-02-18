@@ -12,8 +12,11 @@ import {
 } from "@/lib/api/errors";
 import { jsonResponse, noContentResponse } from "@/lib/api/response";
 import { findModule, saveModule, deleteModule } from "@/lib/data/modules";
+import { isUniqueConstraintError } from "@/lib/data/errors";
 import { uploadModuleTarball, deleteObject } from "@/lib/storage/r2";
 import { generateModuleKey } from "@/lib/storage/keys";
+import { requireAuth } from "@/lib/auth/middleware";
+import { MAX_MODULE_SIZE } from "@/lib/validation/limits";
 
 type RouteParams = {
   params: Promise<{
@@ -29,8 +32,11 @@ type RouteParams = {
  *
  * Return full metadata for a specific module version.
  */
-export async function GET(_request: NextRequest, { params }: RouteParams) {
+export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
+    const auth = await requireAuth(request, "modules:read");
+    if (auth instanceof Response) return auth;
+
     const rawParams = await params;
     const parsed = moduleGetParams.safeParse(rawParams);
     if (!parsed.success) return validationError(parsed.error.issues);
@@ -67,16 +73,24 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
  *
  * Publish a new module version.
  * Body: multipart form data with `module` (tarball file) + optional `owner` text field.
+ *
+ * Consistency guarantee: R2 upload + DB insert are made atomic via
+ * "upload-then-insert-with-rollback". If the DB insert fails, the
+ * R2 object is deleted to prevent orphaned artifacts.
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
+    const auth = await requireAuth(request, "modules:write");
+    if (auth instanceof Response) return auth;
+
     const rawParams = await params;
     const parsed = modulePublishParams.safeParse(rawParams);
     if (!parsed.success) return validationError(parsed.error.issues);
 
     const { namespace, name, system, version } = parsed.data;
 
-    // Check for duplicate
+    // Fast-path duplicate check — avoids R2 upload for known conflicts.
+    // NOT the only protection: the DB unique constraint is the authoritative guard.
     const existing = await findModule(namespace, name, system, version);
     if (existing) {
       return conflict(
@@ -84,34 +98,58 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Parse multipart form (Web API — native in Cloudflare Workers)
     const formData = await request.formData();
     const moduleFile = formData.get("module");
     if (!moduleFile || !(moduleFile instanceof File)) {
       return badRequest("Missing 'module' file in form data");
     }
 
+    if (moduleFile.size > MAX_MODULE_SIZE) {
+      return badRequest(
+        `Module tarball exceeds maximum size of ${MAX_MODULE_SIZE / (1024 * 1024)} MB`,
+      );
+    }
+
     const owner = (formData.get("owner") as string) ?? "";
 
-    // Upload tarball to R2
-    const tarball = await moduleFile.arrayBuffer();
-    const location = await uploadModuleTarball(
+    // Step 1: Upload tarball to R2 (streamed to avoid buffering entire file)
+    const r2Key = await uploadModuleTarball(
       namespace,
       name,
       system,
       version,
-      tarball,
+      moduleFile.stream(),
     );
 
-    // Save metadata to D1
-    const mod = await saveModule({
-      namespace,
-      name,
-      provider: system, // "system" in URL -> "provider" in DB
-      version,
-      owner,
-      location,
-    });
+    // Step 2: Save metadata to D1
+    // On failure: delete the R2 object to prevent orphaned artifacts
+    let mod;
+    try {
+      mod = await saveModule({
+        namespace,
+        name,
+        provider: system,
+        version,
+        owner,
+        location: r2Key,
+      });
+    } catch (dbError) {
+      // Consistency guarantee: R2 upload succeeded but DB failed → clean up R2
+      try {
+        await deleteObject(r2Key);
+      } catch (r2CleanupError) {
+        console.error("R2 cleanup failed after DB error:", r2CleanupError);
+      }
+
+      if (isUniqueConstraintError(dbError)) {
+        return conflict(
+          `Module ${namespace}/${name}/${system} version ${version} already exists`,
+        );
+      }
+
+      console.error("DB error publishing module:", dbError);
+      return internalError();
+    }
 
     return jsonResponse(
       {
@@ -137,8 +175,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
  *
  * Delete a specific module version and its tarball from R2.
  */
-export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
+    // Authenticate — write operations require a valid API key
+    const auth = await requireAuth(request, "modules:write");
+    if (auth instanceof Response) return auth;
+
     const rawParams = await params;
     const parsed = modulePublishParams.safeParse(rawParams);
     if (!parsed.success) return validationError(parsed.error.issues);
