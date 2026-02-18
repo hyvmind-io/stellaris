@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+pnpm-lock.yaml
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Next.js
+.next/
+out/
+build/
+dist/
+
+# OpenNext
+.open-next/
+
+# Cloudflare
+.wrangler/
+*.d.ts.map
+
+# Environment (standard Next.js pattern)
+.env*.local
+.dev.vars
+
+# Testing
+coverage/
+.vitest/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Drizzle
+drizzle/
+
+# Generated types
+cloudflare-env.d.ts
