@@ -1,0 +1,294 @@
+@import "tailwindcss";
+
+/**
+ * Stellaris Design System — Dracula Pro / Alucard Theme
+ *
+ * Light Mode: Alucard Pro (via :root)
+ * Dark Mode: Dracula Pro (via .dark class from next-themes)
+ *
+ * Based on https://draculatheme.com/pro
+ *
+ * Tailwind v4 uses @theme for design tokens and CSS custom properties
+ * for runtime theme switching via .dark class.
+ */
+
+/* ============================================================================
+ * CSS Custom Properties — Light / Dark Mode Switching
+ * Runtime-switchable via the .dark class from next-themes
+ * ============================================================================ */
+
+:root {
+  /* Alucard Light Mode Colors (HSL) */
+  --background: 0 0% 96%;
+  --foreground: 0 0% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 12%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 12%;
+  --primary: 248 51% 54%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 200 96% 30%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 240 18% 84%;
+  --muted-foreground: 246 24% 48%;
+  --accent: 341 78% 36%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 6 65% 48%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 240 10% 85%;
+  --input: 240 10% 85%;
+  --ring: 248 51% 54%;
+  --radius: 0.5rem;
+
+  /* Alucard Accent Colors */
+  --theme-background: #F5F5F5;
+  --theme-foreground: #1F1F1F;
+  --theme-selection: #CFCFDE;
+  --theme-comment: #635D97;
+  --theme-cyan: #036A96;
+  --theme-green: #14710A;
+  --theme-orange: #A34D14;
+  --theme-pink: #A3144D;
+  --theme-purple: #644AC9;
+  --theme-red: #CB3A2A;
+  --theme-yellow: #846E15;
+  --theme-current-line: #E8E8EC;
+
+  /* Brand Colors */
+  --brand-primary: #644AC9;
+  --brand-secondary: #036A96;
+
+  /* Shadow Variables */
+  --shadow-glow: 0 0 15px 5px rgba(100, 74, 201, 0.2);
+  --shadow-glow-lg: 0 0 25px 10px rgba(100, 74, 201, 0.3);
+  --shadow-card: 0px 10px 30px rgba(0, 0, 0, 0.1);
+  --shadow-card-hover: 0px 15px 35px rgba(0, 0, 0, 0.15);
+
+  /* Sidebar — Alucard (Light) */
+  --sidebar-background: 0 0% 100%;
+  --sidebar-foreground: 0 0% 12%;
+  --sidebar-primary: 248 51% 54%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 240 18% 94%;
+  --sidebar-accent-foreground: 0 0% 12%;
+  --sidebar-border: 240 10% 90%;
+  --sidebar-ring: 248 51% 54%;
+
+  /* Chart Colors — Alucard */
+  --chart-1: 248 51% 54%;
+  --chart-2: 200 96% 30%;
+  --chart-3: 341 78% 36%;
+  --chart-4: 6 65% 48%;
+  --chart-5: 35 70% 40%;
+}
+
+.dark {
+  /* Dracula Pro Dark Mode Colors (HSL) */
+  --background: 250 15% 15%;
+  --foreground: 60 30% 96%;
+  --card: 250 17% 18%;
+  --card-foreground: 60 30% 96%;
+  --popover: 250 15% 20%;
+  --popover-foreground: 60 30% 96%;
+  --primary: 250 100% 75%;
+  --primary-foreground: 250 15% 15%;
+  --secondary: 170 100% 75%;
+  --secondary-foreground: 250 15% 15%;
+  --muted: 250 15% 30%;
+  --muted-foreground: 250 25% 55%;
+  --accent: 330 100% 75%;
+  --accent-foreground: 250 15% 15%;
+  --destructive: 10 100% 75%;
+  --destructive-foreground: 250 15% 15%;
+  --border: 250 15% 30%;
+  --input: 250 15% 30%;
+  --ring: 250 100% 75%;
+
+  /* Dracula Pro Accent Colors */
+  --theme-background: #22212C;
+  --theme-foreground: #F8F8F2;
+  --theme-selection: #454158;
+  --theme-comment: #7970A9;
+  --theme-cyan: #80FFEA;
+  --theme-green: #8AFF80;
+  --theme-orange: #FFCA80;
+  --theme-pink: #FF80BF;
+  --theme-purple: #9580FF;
+  --theme-red: #FF9580;
+  --theme-yellow: #FFFF80;
+  --theme-current-line: #2A293A;
+
+  /* Brand Colors — Dark Mode */
+  --brand-primary: #9580FF;
+  --brand-secondary: #80FFEA;
+
+  /* Shadow Variables — Dark Mode */
+  --shadow-glow: 0 0 15px 5px rgba(149, 128, 255, 0.3);
+  --shadow-glow-lg: 0 0 25px 10px rgba(149, 128, 255, 0.4);
+  --shadow-card: 0px 10px 30px rgba(0, 0, 0, 0.3);
+  --shadow-card-hover: 0px 15px 35px rgba(0, 0, 0, 0.4);
+
+  /* Sidebar — Dracula (Dark) */
+  --sidebar-background: 250 17% 18%;
+  --sidebar-foreground: 60 30% 96%;
+  --sidebar-primary: 250 100% 75%;
+  --sidebar-primary-foreground: 250 15% 15%;
+  --sidebar-accent: 250 15% 25%;
+  --sidebar-accent-foreground: 60 30% 96%;
+  --sidebar-border: 250 15% 30%;
+  --sidebar-ring: 250 100% 75%;
+
+  /* Chart Colors — Dracula */
+  --chart-1: 250 100% 75%;
+  --chart-2: 170 100% 75%;
+  --chart-3: 330 100% 75%;
+  --chart-4: 10 100% 75%;
+  --chart-5: 45 100% 75%;
+}
+
+/* ============================================================================
+ * Tailwind v4 Theme Configuration
+ * Maps CSS custom properties to Tailwind's color system
+ * ============================================================================ */
+
+@theme {
+  /* Core colors */
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  /* Sidebar colors */
+  --color-sidebar-background: hsl(var(--sidebar-background));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+
+  /* Chart colors */
+  --color-chart-1: hsl(var(--chart-1));
+  --color-chart-2: hsl(var(--chart-2));
+  --color-chart-3: hsl(var(--chart-3));
+  --color-chart-4: hsl(var(--chart-4));
+  --color-chart-5: hsl(var(--chart-5));
+
+  /* Brand colors */
+  --color-brand-primary: var(--brand-primary);
+  --color-brand-secondary: var(--brand-secondary);
+
+  /* Theme accent colors */
+  --color-theme-cyan: var(--theme-cyan);
+  --color-theme-green: var(--theme-green);
+  --color-theme-orange: var(--theme-orange);
+  --color-theme-pink: var(--theme-pink);
+  --color-theme-purple: var(--theme-purple);
+  --color-theme-red: var(--theme-red);
+  --color-theme-yellow: var(--theme-yellow);
+  --color-theme-comment: var(--theme-comment);
+
+  /* Radius */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* ============================================================================
+ * Base Styles
+ * ============================================================================ */
+
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+::selection {
+  background-color: var(--theme-selection);
+  color: var(--theme-foreground);
+}
+
+/* ============================================================================
+ * Custom Utilities
+ * ============================================================================ */
+
+@utility shadow-glow {
+  box-shadow: var(--shadow-glow);
+}
+
+@utility shadow-glow-lg {
+  box-shadow: var(--shadow-glow-lg);
+}
+
+@utility shadow-card {
+  box-shadow: var(--shadow-card);
+}
+
+@utility shadow-card-hover {
+  box-shadow: var(--shadow-card-hover);
+}
+
+@utility gradient-primary {
+  background: linear-gradient(135deg, var(--brand-primary) 0%, transparent 100%);
+}
+
+@utility gradient-brand {
+  background: linear-gradient(135deg, var(--theme-purple) 0%, var(--theme-pink) 50%, var(--theme-cyan) 100%);
+}
+
+@utility gradient-dark-overlay {
+  background: linear-gradient(180deg, hsl(var(--background) / 0.9) 0%, hsl(var(--muted) / 0.7) 50%, hsl(var(--background)) 100%);
+}
+
+/* ============================================================================
+ * Animations
+ * ============================================================================ */
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes glow {
+  0% {
+    box-shadow: var(--shadow-glow);
+  }
+  100% {
+    box-shadow: var(--shadow-glow-lg);
+  }
+}
+
+@utility animate-shimmer {
+  animation: shimmer 5s ease-in-out infinite;
+  background-size: 200% 100%;
+}
+
+@utility animate-glow {
+  animation: glow 1.5s ease-in-out infinite alternate;
+}

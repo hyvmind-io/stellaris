@@ -1,0 +1,40 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "main": ".open-next/worker.js",
+  "name": "stellaris",
+  "compatibility_date": "2024-12-30",
+  "compatibility_flags": [
+    "nodejs_compat",
+    "global_fetch_strictly_public"
+  ],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "stellaris"
+    }
+  ],
+  // D1 Database — Terraform registry metadata
+  // Create with: wrangler d1 create stellaris-db
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "stellaris-db",
+      "database_id": "placeholder-update-after-creation"
+    }
+  ],
+  // R2 Bucket — Module/provider artifact storage
+  // Create with: wrangler r2 bucket create stellaris-modules
+  "r2_buckets": [
+    {
+      "binding": "MODULES_STORAGE",
+      "bucket_name": "stellaris-modules"
+    }
+  ],
+  "vars": {
+    "NODE_ENV": "production"
+  }
+}
