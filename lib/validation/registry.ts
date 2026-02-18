@@ -32,12 +32,20 @@ export const typeSchema = z
   .max(64)
   .regex(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/, "Invalid type format");
 
-/** Strict semver (major.minor.patch with optional pre-release and build metadata). */
+/** Semver with optional leading v/V prefix (stripped automatically).
+ *  Accepts: "1.0.0", "v1.0.0", "V1.0.0", "1.2.3-alpha+build.1"
+ *  Normalizes: "v1.0.0" → "1.0.0"
+ *  Rejects: "1.0", "abc", "vv1.0.0"
+ */
 export const versionSchema = z
   .string()
-  .regex(
-    /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/,
-    "Invalid semver version",
+  .transform((val) => val.replace(/^[vV]/, ""))
+  .refine(
+    (val) =>
+      /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/.test(
+        val,
+      ),
+    { message: "Invalid semver version" },
   );
 
 /** Operating system identifier — lowercase alphanumeric + underscores. */
@@ -177,3 +185,29 @@ export const providerGetParams = providerArtifactParams;
 export type ModuleListQuery = z.infer<typeof moduleListQuery>;
 export type ProviderListQuery = z.infer<typeof providerListQuery>;
 export type ProviderPublishData = z.infer<typeof providerPublishData>;
+
+// ============================================================================
+// API Key Schemas
+// ============================================================================
+
+/**
+ * JSON body for POST /v1/api-keys — create a new API key.
+ * Replaces manual typeof validation in the route handler.
+ */
+export const createApiKeyBody = z
+  .object({
+    /** Human-readable name for the key (required, 1-255 chars). */
+    name: z.string().min(1, "'name' must be a non-empty string").max(255),
+    /** Optional description of the key's purpose. */
+    description: z.string().max(1000).optional(),
+    /** Optional list of permission strings (e.g., ["read", "write"]). */
+    permissions: z.array(z.string().min(1)).optional(),
+    /** Optional ISO 8601 expiration datetime (e.g., "2026-01-01T00:00:00.000Z"). */
+    expires_at: z
+      .string()
+      .datetime({ message: "'expires_at' must be a valid ISO 8601 datetime" })
+      .optional(),
+  })
+  .strict({ message: "Unknown fields are not allowed" });
+
+export type CreateApiKeyBody = z.infer<typeof createApiKeyBody>;

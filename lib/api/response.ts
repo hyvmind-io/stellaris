@@ -23,6 +23,25 @@ export function noContentResponse(headers: Record<string, string>): Response {
 }
 
 /**
+ * Create a 200 OK response for module download redirects.
+ *
+ * Dual compatibility:
+ * - X-Terraform-Get header → consumed by Terraform CLI
+ * - JSON body { location } → consumed by OpenTofu CLI
+ *
+ * ref: https://opentofu.org/docs/internals/module-registry-protocol/
+ */
+export function moduleDownloadResponse(location: string): Response {
+  return new Response(JSON.stringify({ location }), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json",
+      "X-Terraform-Get": location,
+    },
+  });
+}
+
+/**
  * Create a binary streaming response for serving artifacts from R2.
  */
 export function binaryResponse(

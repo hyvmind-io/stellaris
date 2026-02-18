@@ -35,7 +35,13 @@ export function Footer() {
         <Separator className="my-4" />
 
         <p className="text-center text-xs text-muted-foreground">
-          Powered by Next.js · Cloudflare Workers · D1 · R2
+          Powered by Next.js · Cloudflare Workers
+        </p>
+        <p
+          className="text-center text-xs text-muted-foreground"
+          style={{ fontSize: "0.6rem" }}
+        >
+          built with ❤️ by <a href="https://github.com/nmindz">nmindz</a>
         </p>
       </div>
     </footer>

@@ -24,3 +24,33 @@ export function generateProviderKey(
 ): string {
   return `providers/${namespace}/${type}/${version}/terraform-provider-${type}_${version}_${os}_${arch}.zip`;
 }
+
+/**
+ * Parse an R2 key back into its components.
+ * Inverse of generateModuleKey().
+ *
+ * Format: modules/{namespace}/{name}/{provider}/{version}.tar.gz
+ *
+ * Returns null if the key does not match the expected format.
+ */
+export function parseModuleKey(key: string): {
+  namespace: string;
+  name: string;
+  provider: string;
+  version: string;
+} | null {
+  const parts = key.split("/");
+  if (
+    parts.length !== 5 ||
+    parts[0] !== "modules" ||
+    !parts[4]?.endsWith(".tar.gz")
+  ) {
+    return null;
+  }
+  return {
+    namespace: parts[1]!,
+    name: parts[2]!,
+    provider: parts[3]!,
+    version: parts[4].slice(0, -".tar.gz".length),
+  };
+}

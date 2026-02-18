@@ -8,17 +8,12 @@ import * as schema from "./schema";
  * Uses React's cache() to deduplicate within the same request.
  *
  * Use this in Server Components, Route Handlers, and Server Actions.
+ *
+ * NOTE: getDbAsync was removed — Cloudflare D1 is always available synchronously
+ * via getCloudflareContext() in route handlers and server components.
  */
 export const getDb = cache(() => {
   const { env } = getCloudflareContext();
-  return drizzle(env.DB, { schema });
-});
-
-/**
- * Async variant for static routes (ISR/SSG).
- */
-export const getDbAsync = cache(async () => {
-  const { env } = await getCloudflareContext({ async: true });
   return drizzle(env.DB, { schema });
 });
 
