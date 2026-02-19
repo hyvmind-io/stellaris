@@ -106,6 +106,21 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // Pre-check Content-Length for obviously oversized requests.
+    // A provider publish includes zip files for each platform plus SHA256SUMS and signature.
+    // The generous upper bound allows for multiple platform zips.
+    const contentLength = request.headers.get("Content-Length");
+    if (contentLength) {
+      const size = Number(contentLength);
+      // Allow up to 10 platforms * MAX_PROVIDER_ZIP_SIZE + overhead for shasums/sig/JSON
+      const maxProviderPublishSize = 10 * MAX_PROVIDER_ZIP_SIZE + 1024 * 1024;
+      if (!Number.isNaN(size) && size > maxProviderPublishSize) {
+        return badRequest(
+          "Request body exceeds maximum allowed size for provider publish",
+        );
+      }
+    }
+
     const formData = await request.formData();
 
     // 1. Parse and validate the JSON data field

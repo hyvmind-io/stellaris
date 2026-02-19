@@ -9,7 +9,7 @@ describe("Upload size limits", () => {
     expect(MAX_MODULE_SIZE).toBe(50 * 1024 * 1024);
   });
 
-  it("MAX_PROVIDER_ZIP_SIZE is 100 MB", () => {
-    expect(MAX_PROVIDER_ZIP_SIZE).toBe(100 * 1024 * 1024);
+  it("MAX_PROVIDER_ZIP_SIZE is 64 MB", () => {
+    expect(MAX_PROVIDER_ZIP_SIZE).toBe(64 * 1024 * 1024);
   });
 });

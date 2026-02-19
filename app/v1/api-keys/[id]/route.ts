@@ -1,10 +1,15 @@
 import type { NextRequest } from "next/server";
-import { eq } from "drizzle-orm";
+import { count, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db/client";
 import { apiKeys } from "@/db/schema";
 import { requireAuth } from "@/lib/auth/middleware";
-import { notFound, validationError, internalError } from "@/lib/api/errors";
+import {
+  badRequest,
+  notFound,
+  validationError,
+  internalError,
+} from "@/lib/api/errors";
 import { noContentResponse } from "@/lib/api/response";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -17,8 +22,8 @@ type RouteParams = { params: Promise<{ id: string }> };
  *
  * Returns 204 on success, 404 if the key doesn't exist.
  *
- * Self-revocation is allowed: if an admin deletes their own key and it's the
- * last key, the registry enters bootstrap mode (unauthenticated key creation).
+ * Self-revocation is allowed unless this is the last admin key — deleting the
+ * last admin key is blocked to prevent accidental lockout into bootstrap mode.
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
@@ -32,14 +37,45 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     }
 
     const db = getDb();
-    const deleted = await db
-      .delete(apiKeys)
-      .where(eq(apiKeys.id, parsed.data))
-      .returning({ id: apiKeys.id });
 
-    if (deleted.length === 0) {
+    // Check the key exists before attempting deletion
+    const keyToDelete = await db
+      .select({ id: apiKeys.id, permissions: apiKeys.permissions })
+      .from(apiKeys)
+      .where(eq(apiKeys.id, parsed.data))
+      .get();
+
+    if (!keyToDelete) {
       return notFound(`API key ${parsed.data} not found`);
     }
+
+    // Prevent deletion of the last admin key to avoid accidental lockout.
+    // If the only remaining admin key is deleted, the registry enters bootstrap
+    // mode where anyone can create keys without authentication.
+    const keyPerms = keyToDelete.permissions ?? [];
+    if (keyPerms.includes("admin")) {
+      // Count all admin keys (keys where permissions JSON array contains "admin").
+      // SQLite json_each() extracts elements from JSON arrays for filtering.
+      const adminKeyCount = await db
+        .select({ total: count() })
+        .from(apiKeys)
+        .where(
+          sql`EXISTS (
+            SELECT 1 FROM json_each(${apiKeys.permissions})
+            WHERE json_each.value = 'admin'
+          )`,
+        );
+
+      const totalAdminKeys = adminKeyCount[0]?.total ?? 0;
+      if (totalAdminKeys <= 1) {
+        return badRequest(
+          "Cannot delete the last admin API key. At least one admin key must exist to prevent lockout.",
+        );
+      }
+    }
+
+    // Perform the actual delete
+    await db.delete(apiKeys).where(eq(apiKeys.id, parsed.data));
 
     return noContentResponse({});
   } catch (error) {
