@@ -58,7 +58,7 @@ components/
   *.tsx                        — Shared app components
 db/
   schema.ts                    — Drizzle schema (modules, providers, platforms, gpg_keys, api_keys)
-  client.ts                    — DB client factory (getDb, getDbAsync)
+  client.ts                    — DB client factory (getDb)
 lib/
   api/errors.ts                — Error response helpers (notFound, badRequest, conflict, etc.)
   api/response.ts              — Response helpers (jsonResponse, binaryResponse, etc.)
@@ -131,7 +131,6 @@ lib/
 
 - Schema at `db/schema.ts`. Use section dividers (`// ====...`) between tables.
 - Use `getDb()` (sync, via React cache) in route handlers and server components.
-- Use `getDbAsync()` for static/ISR routes.
 - All data access in `lib/data/*.ts` — never query DB directly in route handlers or components.
 - Transactions via `db.transaction(async (tx) => {...})` for multi-table writes.
 

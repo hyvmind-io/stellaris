@@ -25,7 +25,8 @@
     "db:setup:remote": "zsh scripts/setup-remote-db.sh",
     "db:reset": "zsh scripts/reset-local-db.sh",
     "db:reset:local": "zsh scripts/reset-local-db.sh",
-    "db:reset:remote": "zsh scripts/reset-remote-db.sh"
+    "db:reset:remote": "zsh scripts/reset-remote-db.sh",
+    "db:create-key": "zsh scripts/generate-api-key.sh"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.16.5",

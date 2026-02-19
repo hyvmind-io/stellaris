@@ -131,9 +131,10 @@ export async function deleteByPrefix(prefix: string): Promise<number> {
 
   do {
     const listed = await bucket.list({ prefix, cursor });
-    for (const obj of listed.objects) {
-      await bucket.delete(obj.key);
-      deleted++;
+    if (listed.objects.length > 0) {
+      const keys = listed.objects.map((obj) => obj.key);
+      await bucket.delete(keys);
+      deleted += keys.length;
     }
     cursor = listed.truncated ? listed.cursor : undefined;
   } while (cursor);

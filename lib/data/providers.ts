@@ -1,4 +1,4 @@
-import { eq, and, count, desc, inArray, sql } from "drizzle-orm";
+import { eq, and, count, desc, inArray, sql, SQL } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { providers, providerPlatforms, gpgPublicKeys } from "@/db/schema";
 import type { Provider, ProviderPlatform, GpgPublicKey } from "@/db/schema";
@@ -199,6 +199,9 @@ export async function saveProvider(params: {
       })
       .returning();
 
+    // Insert always returns exactly one row on success; failure throws
+    if (!provider) throw new Error("Provider insert returned no rows");
+
     // 2. Insert platforms
     if (params.platforms.length > 0) {
       await tx.insert(providerPlatforms).values(
@@ -282,7 +285,7 @@ export async function findAllProviders(params: {
   const offset = params.offset ?? 0;
   const limit = params.limit ?? 15;
 
-  const conditions = [];
+  const conditions: SQL[] = [];
   if (params.namespace) {
     conditions.push(eq(providers.namespace, params.namespace));
   }
@@ -292,15 +295,13 @@ export async function findAllProviders(params: {
   if (params.q) {
     const escaped = escapeLike(params.q);
     conditions.push(
-      sql`${providers.type} LIKE ${"%" + escaped + "%"} ESCAPE '\\'` as ReturnType<
-        typeof eq
-      >,
+      sql`${providers.type} LIKE ${"%" + escaped + "%"} ESCAPE '\\'`,
     );
   }
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
-  const [rows, [totalResult]] = await Promise.all([
+  const [rows, countResult] = await Promise.all([
     db
       .select()
       .from(providers)
@@ -313,7 +314,7 @@ export async function findAllProviders(params: {
 
   return {
     providers: rows,
-    meta: { offset, limit, total: totalResult.total },
+    meta: { offset, limit, total: countResult[0]?.total ?? 0 },
   };
 }
 
@@ -335,27 +336,33 @@ export async function browseProviders(params: {
   const offset = params.offset ?? 0;
   const limit = params.limit ?? 15;
 
-  const conditions: ReturnType<typeof eq>[] = [];
+  const conditions: SQL[] = [];
   if (params.namespace) {
     conditions.push(eq(providers.namespace, params.namespace));
   }
   if (params.q) {
     const escaped = escapeLike(params.q);
     conditions.push(
-      sql`${providers.type} LIKE ${"%" + escaped + "%"} ESCAPE '\\'` as ReturnType<
-        typeof eq
-      >,
+      sql`${providers.type} LIKE ${"%" + escaped + "%"} ESCAPE '\\'`,
     );
   }
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
-  // Subquery: max published_at per unique (namespace, type)
+  // Subquery: find the latest id per unique (namespace, type)
+  // Uses a correlated subquery to pick the row with the newest published_at,
+  // breaking ties by id DESC so timestamp collisions never produce duplicates.
   const latestSq = db
     .select({
       namespace: providers.namespace,
       type: providers.type,
-      maxPub: sql<number>`MAX(${providers.publishedAt})`.as("max_pub"),
+      latestId: sql<number>`(
+        SELECT p2.id FROM providers p2
+        WHERE p2.namespace = ${providers.namespace}
+          AND p2.type = ${providers.type}
+        ORDER BY p2.published_at DESC, p2.id DESC
+        LIMIT 1
+      )`.as("latest_id"),
     })
     .from(providers)
     .where(where)
@@ -371,7 +378,7 @@ export async function browseProviders(params: {
         and(
           eq(providers.namespace, latestSq.namespace),
           eq(providers.type, latestSq.type),
-          sql`${providers.publishedAt} = ${latestSq.maxPub}`,
+          eq(providers.id, latestSq.latestId),
         ),
       )
       .orderBy(desc(providers.publishedAt))

@@ -53,7 +53,10 @@ export function binaryResponse(
     "Content-Type": contentType,
   };
   if (filename) {
-    headers["Content-Disposition"] = `attachment; filename="${filename}"`;
+    // Sanitize: allow only safe characters (word chars, dots, hyphens).
+    // Anything else is replaced with underscore to prevent header injection.
+    const safeFilename = filename.replace(/[^\w.\-]/g, "_");
+    headers["Content-Disposition"] = `attachment; filename="${safeFilename}"`;
   }
   return new Response(body, {
     status: 200,

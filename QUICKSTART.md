@@ -23,8 +23,30 @@ pnpm db:reset
 
 This wipes `.wrangler/` and re-applies all migrations from scratch.
 
+### Generate additional API keys
+
+```bash
+# Basic key
+pnpm db:create-key --name "my-key"
+
+# With description and permissions
+pnpm db:create-key --name "ci-pipeline" --description "CI/CD key" --permissions '["publish"]'
+
+# Admin key
+pnpm db:create-key --name "admin" --permissions '["admin"]'
+
+# Insert into remote database
+pnpm db:create-key --name "prod-ci" --permissions '["publish"]' --remote
+```
+
+This inserts a key directly into the D1 database via wrangler (no running server needed).
+Run `pnpm db:create-key --help` for all options.
+
 The setup script creates a well-known dev API key:
+
+```
 stlr_0000000000000000000000000000000000000dev
+```
 
 ## Verify service discovery
 
@@ -41,7 +63,8 @@ curl http://localhost:3000/.well-known/terraform.json
 ## Publishing a Module
 
 A module is a .tar.gz tarball of Terraform code.
-Create a test module tarball
+
+### Create a test module tarball
 
 ```bash
 # Create a minimal Terraform module
@@ -67,14 +90,14 @@ Response (201):
 
 ```json
 {
-  id: myorg/hello/aws/1.0.0,
-  namespace: myorg,
-  name: hello,
-  provider: aws,
-  version: 1.0.0,
-  owner: platform-team,
-  published_at: 2026-02-19T...,
-  downloads: 0
+  "id": "myorg/hello/aws/1.0.0",
+  "namespace": "myorg",
+  "name": "hello",
+  "provider": "aws",
+  "version": "1.0.0",
+  "owner": "platform-team",
+  "published_at": "2026-02-19T...",
+  "downloads": 0
 }
 ```
 
@@ -251,6 +274,13 @@ curl http://localhost:3000/v1/providers
 
 ## Quick Reference: API Key Management
 
+### Via CLI script (no server needed)
+
+```bash
+pnpm db:create-key --name "my-key"
+pnpm db:create-key --name "admin" --permissions '["admin"]' --remote
+```
+
 ### Bootstrap first key (no auth needed when DB is empty)
 
 ```bash
@@ -274,6 +304,18 @@ curl -X POST http://localhost:3000/v1/api-keys \
 curl http://localhost:3000/v1/api-keys \
   -H "Authorization: Bearer stlr_..."
 ```
+
+## Quick Reference: pnpm Scripts
+
+| Command                | Description                                        |
+| ---------------------- | -------------------------------------------------- |
+| `pnpm db:setup`        | Apply migrations + create dev API key (local)      |
+| `pnpm db:reset`        | Wipe `.wrangler/` and re-setup (local)             |
+| `pnpm db:create-key`   | Generate a new API key (local or `--remote`)       |
+| `pnpm db:setup:remote` | Apply migrations to remote D1                      |
+| `pnpm db:reset:remote` | Drop all tables + re-setup remote D1 (destructive) |
+| `pnpm db:generate`     | Generate Drizzle migrations from schema            |
+| `pnpm db:studio`       | Open Drizzle Studio (visual DB browser)            |
 
 ## Quick Reference: Validation Rules
 

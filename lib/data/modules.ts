@@ -1,4 +1,4 @@
-import { eq, and, desc, sql, count } from "drizzle-orm";
+import { eq, and, desc, sql, count, SQL } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { modules } from "@/db/schema";
 import type { Module } from "@/db/schema";
@@ -128,7 +128,8 @@ export async function saveModule(data: {
       location: data.location,
     })
     .returning();
-  return module;
+  // Insert always returns exactly one row on success; failure throws
+  return module!;
 }
 
 /**
@@ -174,7 +175,7 @@ export async function findAllModules(params: {
   const offset = params.offset ?? 0;
   const limit = params.limit ?? 15;
 
-  const conditions = [];
+  const conditions: SQL[] = [];
   if (params.namespace) {
     conditions.push(eq(modules.namespace, params.namespace));
   }
@@ -184,15 +185,13 @@ export async function findAllModules(params: {
   if (params.q) {
     const escaped = escapeLike(params.q);
     conditions.push(
-      sql`${modules.name} LIKE ${"%" + escaped + "%"} ESCAPE '\\'` as ReturnType<
-        typeof eq
-      >,
+      sql`${modules.name} LIKE ${"%" + escaped + "%"} ESCAPE '\\'`,
     );
   }
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
-  const [rows, [totalResult]] = await Promise.all([
+  const [rows, countResult] = await Promise.all([
     db
       .select()
       .from(modules)
@@ -205,7 +204,7 @@ export async function findAllModules(params: {
 
   return {
     modules: rows,
-    meta: { offset, limit, total: totalResult.total },
+    meta: { offset, limit, total: countResult[0]?.total ?? 0 },
   };
 }
 
@@ -227,7 +226,7 @@ export async function browseModules(params: {
   const offset = params.offset ?? 0;
   const limit = params.limit ?? 15;
 
-  const conditions: ReturnType<typeof eq>[] = [];
+  const conditions: SQL[] = [];
   if (params.namespace) {
     conditions.push(eq(modules.namespace, params.namespace));
   }
@@ -237,21 +236,28 @@ export async function browseModules(params: {
   if (params.q) {
     const escaped = escapeLike(params.q);
     conditions.push(
-      sql`${modules.name} LIKE ${"%" + escaped + "%"} ESCAPE '\\'` as ReturnType<
-        typeof eq
-      >,
+      sql`${modules.name} LIKE ${"%" + escaped + "%"} ESCAPE '\\'`,
     );
   }
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
-  // Subquery: find the max published_at per unique (namespace, name, provider)
+  // Subquery: find the latest id per unique (namespace, name, provider)
+  // Uses a correlated subquery to pick the row with the newest published_at,
+  // breaking ties by id DESC so timestamp collisions never produce duplicates.
   const latestSq = db
     .select({
       namespace: modules.namespace,
       name: modules.name,
       provider: modules.provider,
-      maxPub: sql<number>`MAX(${modules.publishedAt})`.as("max_pub"),
+      latestId: sql<number>`(
+        SELECT m2.id FROM modules m2
+        WHERE m2.namespace = ${modules.namespace}
+          AND m2.name = ${modules.name}
+          AND m2.provider = ${modules.provider}
+        ORDER BY m2.published_at DESC, m2.id DESC
+        LIMIT 1
+      )`.as("latest_id"),
     })
     .from(modules)
     .where(where)
@@ -268,7 +274,7 @@ export async function browseModules(params: {
           eq(modules.namespace, latestSq.namespace),
           eq(modules.name, latestSq.name),
           eq(modules.provider, latestSq.provider),
-          sql`${modules.publishedAt} = ${latestSq.maxPub}`,
+          eq(modules.id, latestSq.latestId),
         ),
       )
       .orderBy(desc(modules.publishedAt))
