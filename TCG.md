@@ -67,7 +67,7 @@ error/response helpers, Zod validation schemas, and R2 key generators.
 **Key exports consumed downstream:**
 
 - Types: `Module`, `NewModule`, `Provider`, `NewProvider`, `ProviderPlatform`, `GpgPublicKey`, `ApiKey`
-- Client: `getDb()`, `getDbAsync()`
+- Client: `getDb()`
 - Helpers: `cn()`, `env`, `isValidSemver()`, `compareVersions()`, `normalizeVersion()`
 - API: `notFound()`, `badRequest()`, `conflict()`, `jsonResponse()`, `binaryResponse()`, `textResponse()`
 - Validation: `moduleVersionsParams`, `moduleDownloadParams`, `providerDownloadParams`, `providerPublishData`, etc.

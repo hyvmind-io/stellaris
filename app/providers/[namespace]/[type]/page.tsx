@@ -25,13 +25,20 @@ export async function generateMetadata({
 export default async function ProviderDetailPage({ params }: PageProps) {
   const { namespace, type } = await params;
 
-  const versions = await getProviderVersions(namespace, type);
+  let versions: Awaited<ReturnType<typeof getProviderVersions>> = [];
+
+  try {
+    versions = await getProviderVersions(namespace, type);
+  } catch (error) {
+    console.warn("ProviderDetailPage: failed to fetch provider data:", error);
+  }
 
   if (versions.length === 0) {
     notFound();
   }
 
-  const latest = versions[0];
+  // Safe: length > 0 guard above ensures versions[0] exists
+  const latest = versions[0]!;
 
   return (
     <div className="container mx-auto px-4 py-8">

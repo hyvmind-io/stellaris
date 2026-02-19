@@ -148,8 +148,20 @@ export const providerPublishData = z.object({
       z.object({
         os: osSchema,
         arch: archSchema,
-        shasum: z.string().min(1),
-        filename: z.string().min(1),
+        shasum: z
+          .string()
+          .regex(
+            /^[a-f0-9]{64}$/i,
+            "Invalid SHA-256 hash — must be 64 hex characters",
+          ),
+        filename: z
+          .string()
+          .min(1)
+          .max(255)
+          .regex(
+            /^[a-zA-Z0-9._-]+$/,
+            "Invalid filename — only alphanumeric characters, dots, hyphens, and underscores are allowed",
+          ),
       }),
     )
     .min(1),

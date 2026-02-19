@@ -48,9 +48,10 @@ export function parseModuleKey(key: string): {
     return null;
   }
   return {
+    // Safe: length === 5 check above guarantees all indices exist
     namespace: parts[1]!,
     name: parts[2]!,
     provider: parts[3]!,
-    version: parts[4].slice(0, -".tar.gz".length),
+    version: parts[4]!.slice(0, -".tar.gz".length),
   };
 }

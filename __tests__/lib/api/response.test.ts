@@ -156,6 +156,32 @@ describe("binaryResponse", () => {
     const response = binaryResponse(buffer, "application/octet-stream");
     expect(response.status).toBe(200);
   });
+
+  it("sanitizes dangerous characters from filename in Content-Disposition", () => {
+    const response = binaryResponse(
+      null,
+      "application/zip",
+      'evil"; X-Inject: bad',
+    );
+    const disposition = response.headers.get("Content-Disposition") ?? "";
+    // Quotes, semicolons, colons, and spaces should be replaced with underscores
+    expect(disposition).toBe('attachment; filename="evil___X-Inject__bad"');
+    // Extract filename value and verify no injected special characters survive
+    const filenameMatch = disposition.match(/filename="(.+)"$/);
+    expect(filenameMatch?.[1]).toBe("evil___X-Inject__bad");
+    expect(filenameMatch?.[1]).not.toMatch(/[";:\s]/);
+  });
+
+  it("preserves safe characters (dots, hyphens, underscores) in filename", () => {
+    const response = binaryResponse(
+      null,
+      "application/zip",
+      "provider_aws-4.0.0.zip",
+    );
+    expect(response.headers.get("Content-Disposition")).toBe(
+      'attachment; filename="provider_aws-4.0.0.zip"',
+    );
+  });
 });
 
 // ============================================================================

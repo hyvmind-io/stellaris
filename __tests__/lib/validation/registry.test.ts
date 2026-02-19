@@ -16,6 +16,7 @@ import {
   providerArtifactParams,
   modulePublishParams,
   createApiKeyBody,
+  providerPublishData,
 } from "@/lib/validation/registry";
 
 // ============================================================================
@@ -748,5 +749,122 @@ describe("createApiKeyBody", () => {
     expect(result.description).toBeUndefined();
     expect(result.permissions).toBeUndefined();
     expect(result.expires_at).toBeUndefined();
+  });
+});
+
+// ============================================================================
+// providerPublishData — shasum validation (SEC-011)
+// ============================================================================
+
+describe("providerPublishData — shasum validation", () => {
+  /** Build a valid providerPublishData payload, overriding only the shasum. */
+  function withShasum(shasum: string) {
+    return {
+      protocols: ["5.0"],
+      platforms: [
+        {
+          os: "linux",
+          arch: "amd64",
+          shasum,
+          filename: "terraform-provider-aws_4.0.0_linux_amd64.zip",
+        },
+      ],
+      gpg_public_keys: [
+        {
+          key_id: "ABC123",
+          ascii_armor: "-----BEGIN PGP PUBLIC KEY BLOCK-----",
+        },
+      ],
+    };
+  }
+
+  it("accepts a valid 64-char lowercase hex shasum", () => {
+    expect(valid(providerPublishData, withShasum("a".repeat(64)))).toBe(true);
+  });
+
+  it("accepts a valid 64-char uppercase hex shasum", () => {
+    expect(valid(providerPublishData, withShasum("A".repeat(64)))).toBe(true);
+  });
+
+  it("rejects a shasum shorter than 64 chars", () => {
+    expect(valid(providerPublishData, withShasum("a".repeat(63)))).toBe(false);
+  });
+
+  it("rejects a shasum longer than 64 chars", () => {
+    expect(valid(providerPublishData, withShasum("a".repeat(65)))).toBe(false);
+  });
+
+  it("rejects a shasum with non-hex chars", () => {
+    expect(valid(providerPublishData, withShasum("g".repeat(64)))).toBe(false);
+  });
+
+  it("rejects an empty string shasum", () => {
+    expect(valid(providerPublishData, withShasum(""))).toBe(false);
+  });
+});
+
+// ============================================================================
+// providerPublishData — filename validation (SEC-013)
+// ============================================================================
+
+describe("providerPublishData — filename validation", () => {
+  /** Build a valid providerPublishData payload, overriding only the filename. */
+  function withFilename(filename: string) {
+    return {
+      protocols: ["5.0"],
+      platforms: [
+        {
+          os: "linux",
+          arch: "amd64",
+          shasum: "a".repeat(64),
+          filename,
+        },
+      ],
+      gpg_public_keys: [
+        {
+          key_id: "ABC123",
+          ascii_armor: "-----BEGIN PGP PUBLIC KEY BLOCK-----",
+        },
+      ],
+    };
+  }
+
+  it("accepts a standard Terraform provider filename", () => {
+    expect(
+      valid(
+        providerPublishData,
+        withFilename("terraform-provider-aws_4.0.0_linux_amd64.zip"),
+      ),
+    ).toBe(true);
+  });
+
+  it("accepts a simple filename", () => {
+    expect(valid(providerPublishData, withFilename("provider.zip"))).toBe(true);
+  });
+
+  it("rejects a filename with spaces", () => {
+    expect(valid(providerPublishData, withFilename("my file.zip"))).toBe(false);
+  });
+
+  it("rejects a filename with path separators", () => {
+    expect(valid(providerPublishData, withFilename("../etc/passwd"))).toBe(
+      false,
+    );
+  });
+
+  it("rejects a filename with special characters", () => {
+    expect(valid(providerPublishData, withFilename('file"name.zip'))).toBe(
+      false,
+    );
+  });
+
+  it("rejects an empty string filename", () => {
+    expect(valid(providerPublishData, withFilename(""))).toBe(false);
+  });
+
+  it("rejects a filename over 255 characters", () => {
+    expect(
+      valid(providerPublishData, withFilename("a".repeat(256) + ".zip")),
+    ).toBe(false);
   });
 });

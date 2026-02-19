@@ -31,10 +31,17 @@ export async function generateMetadata({
 export default async function ModuleDetailPage({ params }: PageProps) {
   const { namespace, name, system } = await params;
 
-  const [latestModule, versions] = await Promise.all([
-    getModuleLatestVersion(namespace, name, system),
-    getModuleVersions(namespace, name, system),
-  ]);
+  let latestModule;
+  let versions: Awaited<ReturnType<typeof getModuleVersions>> = [];
+
+  try {
+    [latestModule, versions] = await Promise.all([
+      getModuleLatestVersion(namespace, name, system),
+      getModuleVersions(namespace, name, system),
+    ]);
+  } catch (error) {
+    console.warn("ModuleDetailPage: failed to fetch module data:", error);
+  }
 
   if (!latestModule) {
     notFound();

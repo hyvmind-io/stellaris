@@ -135,7 +135,8 @@ export async function POST(request: NextRequest) {
       | { ok: false; status: "unauthorized" | "forbidden" };
 
     const txResult = await db.transaction(async (tx): Promise<TxResult> => {
-      const [{ total }] = await tx.select({ total: count() }).from(apiKeys);
+      const countResult = await tx.select({ total: count() }).from(apiKeys);
+      const total = countResult[0]?.total ?? 0;
 
       if (total > 0) {
         // Non-bootstrap: require admin auth inline (cannot use requireAuth

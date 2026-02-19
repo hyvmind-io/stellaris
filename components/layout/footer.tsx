@@ -37,10 +37,7 @@ export function Footer() {
         <p className="text-center text-xs text-muted-foreground">
           Powered by Next.js · Cloudflare Workers
         </p>
-        <p
-          className="text-center text-xs text-muted-foreground"
-          style={{ fontSize: "0.6rem" }}
-        >
+        <p className="text-center text-[0.6rem] text-muted-foreground">
           built with ❤️ by <a href="https://github.com/nmindz">nmindz</a>
         </p>
       </div>
