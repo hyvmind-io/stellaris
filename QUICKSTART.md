@@ -62,7 +62,7 @@ curl http://localhost:3000/.well-known/terraform.json
 
 ## Publishing a Module
 
-A module is a .tar.gz tarball of Terraform code.
+A module is a `.tar.gz` tarball of Terraform code. Maximum size: **50 MB**.
 
 ### Create a test module tarball
 
@@ -77,14 +77,30 @@ EOF
 tar -czf /tmp/test-module.tar.gz -C /tmp/test-module .
 ```
 
+### Publish from an existing module directory
+
+When packaging a real module, exclude non-essential files to stay under the 50 MB limit:
+
+```bash
+tar -czf my-module.tar.gz \
+  --exclude='.terraform' \
+  --exclude='.git' \
+  --exclude='.jj' \
+  --exclude='node_modules' \
+  --exclude='.terragrunt-cache' \
+  -C /path/to/your-module .
+```
+
 ### Publish it
 
 ```bash
 curl -X POST http://localhost:3000/v1/modules/myorg/hello/aws/1.0.0 \
   -H "Authorization: Bearer stlr_0000000000000000000000000000000000000dev" \
-  -F "module=@/tmp/test-module.tar.gz" \
+  -F "module=@./my-module.tar.gz" \
   -F "owner=platform-team"
 ```
+
+> **curl tip:** The `-F "module=@./file.tar.gz"` syntax means "file relative to the current directory". Using `@/file.tar.gz` would look for the file at the filesystem root, which is not what you want.
 
 Response (201):
 
@@ -325,3 +341,5 @@ curl http://localhost:3000/v1/api-keys \
 | version                       | Strict semver (1.0.0), v-prefix auto-stripped (v1.0.0 → 1.0.0) |
 | os                            | [a-z0-9_]+, 1–32 chars (e.g., linux, darwin, windows)          |
 | arch                          | [a-z0-9_]+, 1–32 chars (e.g., amd64, arm64)                    |
+| module tarball                | `.tar.gz` file, max **50 MB**                                  |
+| provider zip (per platform)   | `.zip` file, max **64 MB**                                     |

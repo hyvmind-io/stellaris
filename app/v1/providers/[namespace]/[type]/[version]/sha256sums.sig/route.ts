@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { providerArtifactParams } from "@/lib/validation/registry";
 import { notFound, validationError, internalError } from "@/lib/api/errors";
 import { binaryResponse } from "@/lib/api/response";
-import { getObject } from "@/lib/storage/r2";
+import { getObject } from "@/lib/storage";
 import { requireAuth } from "@/lib/auth/middleware";
 
 /**

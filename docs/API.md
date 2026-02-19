@@ -591,7 +591,7 @@ Publish a new module version. The module tarball is uploaded to R2 and metadata 
 
 | Field    | Type   | Required | Description                                 |
 | -------- | ------ | -------- | ------------------------------------------- |
-| `module` | file   | **Yes**  | Module tarball (`.tar.gz`)                  |
+| `module` | file   | **Yes**  | Module tarball (`.tar.gz`), max **50 MB**   |
 | `owner`  | string | No       | Owner identifier (defaults to empty string) |
 
 **Example:**
@@ -620,7 +620,7 @@ curl -X POST https://stellaris.example.com/v1/modules/myorg/vpc/aws/1.0.0 \
 
 **Error Responses:**
 
-- `400` — Missing `module` file in form data
+- `400` — Missing `module` file in form data, or tarball exceeds 50 MB size limit
 - `401` — Missing or invalid API key
 - `409` — Module version already exists
 - `422` — Invalid path parameters
@@ -772,12 +772,12 @@ Publish a new provider version with platform binaries, SHA256 checksums, and GPG
 
 **Request Body:** `multipart/form-data`
 
-| Field            | Type          | Required               | Description                                                                                            |
-| ---------------- | ------------- | ---------------------- | ------------------------------------------------------------------------------------------------------ |
-| `data`           | string (JSON) | **Yes**                | Provider metadata (see schema below)                                                                   |
-| `SHA256SUMS`     | file          | **Yes**                | SHA256 checksums file                                                                                  |
-| `SHA256SUMS.sig` | file          | **Yes**                | GPG signature of the SHA256SUMS file                                                                   |
-| `<filename>.zip` | file          | **Yes** (per platform) | Provider binary zip — one per platform, field name must match `filename` in the `data.platforms` array |
+| Field            | Type          | Required               | Description                                                                                                                 |
+| ---------------- | ------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `data`           | string (JSON) | **Yes**                | Provider metadata (see schema below)                                                                                        |
+| `SHA256SUMS`     | file          | **Yes**                | SHA256 checksums file                                                                                                       |
+| `SHA256SUMS.sig` | file          | **Yes**                | GPG signature of the SHA256SUMS file                                                                                        |
+| `<filename>.zip` | file          | **Yes** (per platform) | Provider binary zip (max **64 MB** each) — one per platform, field name must match `filename` in the `data.platforms` array |
 
 **`data` field JSON schema:**
 
@@ -861,7 +861,7 @@ curl -X POST https://stellaris.example.com/v1/providers/myorg/custom/1.0.0 \
 
 **Error Responses:**
 
-- `400` — Missing required files or invalid JSON in `data` field
+- `400` — Missing required files, invalid JSON in `data` field, or zip exceeds 64 MB size limit
 - `401` — Missing or invalid API key
 - `409` — Provider version already exists
 - `422` — Validation error in `data` field or path parameters

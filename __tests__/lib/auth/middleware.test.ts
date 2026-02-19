@@ -18,6 +18,7 @@ const MOCK_API_KEY = {
   createdAt: new Date(),
   lastUsedAt: null,
   expiresAt: null,
+  userId: null,
 };
 
 function makeRequest(authHeader?: string): NextRequest {

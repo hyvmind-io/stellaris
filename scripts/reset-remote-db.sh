@@ -19,11 +19,15 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Tables in reverse dependency order (children before parents)
 TABLES=(
+    "sessions"
+    "rate_limits"
+    "api_keys"
     "gpg_public_keys"
     "provider_platforms"
     "providers"
     "modules"
-    "api_keys"
+    "system_settings"
+    "users"
 )
 
 # ============================================================================

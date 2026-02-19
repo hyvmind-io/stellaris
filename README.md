@@ -235,10 +235,24 @@ See the [full API documentation](docs/API.md) for detailed request/response exam
 
 ### Publish a Module
 
+**Step 1:** Create a tarball from your module directory. Exclude non-essential files to keep the size under the **50 MB** limit:
+
+```bash
+tar -czf my-module.tar.gz \
+  --exclude='.terraform' \
+  --exclude='.git' \
+  --exclude='.jj' \
+  --exclude='node_modules' \
+  --exclude='.terragrunt-cache' \
+  -C /path/to/your-module .
+```
+
+**Step 2:** Upload the tarball to the registry:
+
 ```bash
 curl -X POST https://stellaris.example.com/v1/modules/myorg/vpc/aws/1.0.0 \
   -H "Authorization: Bearer stlr_your_api_key" \
-  -F "module=@./module.tar.gz" \
+  -F "module=@./my-module.tar.gz" \
   -F "owner=platform-team"
 ```
 
@@ -256,6 +270,10 @@ curl -X POST https://stellaris.example.com/v1/modules/myorg/vpc/aws/1.0.0 \
   "downloads": 0
 }
 ```
+
+> **Size limits:** Module tarballs must be under **50 MB**; provider zips must be under **64 MB** per platform. If your tarball exceeds the limit, check for `.terraform/` directories or other large artifacts that should be excluded.
+>
+> **curl tip:** The `@./` prefix means "file relative to the current directory". Using `@/filename` instead points to the filesystem root (`/filename`), which is almost certainly not what you want.
 
 ### Publish a Provider
 
@@ -325,21 +343,23 @@ curl -X POST https://stellaris.example.com/v1/api-keys \
 
 ### Commands
 
-| Command              | Description                                       |
-| -------------------- | ------------------------------------------------- |
-| `pnpm dev`           | Start dev server with Turbopack                   |
-| `pnpm build`         | Build for production                              |
-| `pnpm preview`       | Build and preview with Cloudflare Workers locally |
-| `pnpm deploy`        | Build and deploy to Cloudflare Workers            |
-| `pnpm test`          | Run tests with Vitest                             |
-| `pnpm test:ui`       | Run tests with Vitest UI                          |
-| `pnpm test:coverage` | Run tests with coverage report                    |
-| `pnpm lint`          | Lint with ESLint                                  |
-| `pnpm type-check`    | TypeScript type checking                          |
-| `pnpm db:generate`   | Generate Drizzle migrations from schema           |
-| `pnpm db:push`       | Push schema changes directly to D1                |
-| `pnpm db:migrate`    | Apply Drizzle migrations                          |
-| `pnpm db:studio`     | Open Drizzle Studio (database GUI)                |
+| Command                | Description                                        |
+| ---------------------- | -------------------------------------------------- |
+| `pnpm dev`             | Start dev server with Turbopack                    |
+| `pnpm build`           | Build for production                               |
+| `pnpm preview`         | Build and preview with Cloudflare Workers locally  |
+| `pnpm deploy`          | Build and deploy to Cloudflare Workers             |
+| `pnpm test`            | Run tests with Vitest                              |
+| `pnpm test:ui`         | Run tests with Vitest UI                           |
+| `pnpm test:coverage`   | Run tests with coverage report                     |
+| `pnpm lint`            | Lint with ESLint                                   |
+| `pnpm type-check`      | TypeScript type checking                           |
+| `pnpm db:generate`     | Generate Drizzle migrations from schema            |
+| `pnpm db:setup`        | Apply migrations locally (via wrangler d1 execute) |
+| `pnpm db:setup:remote` | Apply migrations to remote D1                      |
+| `pnpm db:reset`        | Reset local database (wipes .wrangler/ state)      |
+| `pnpm db:reset:remote` | Full reset of remote D1 (DESTRUCTIVE)              |
+| `pnpm db:studio`       | Open Drizzle Studio (database GUI)                 |
 
 ### Project Structure
 
