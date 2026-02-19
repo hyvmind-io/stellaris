@@ -13,7 +13,7 @@ import {
 import { jsonResponse, noContentResponse } from "@/lib/api/response";
 import { findModule, saveModule, deleteModule } from "@/lib/data/modules";
 import { isUniqueConstraintError } from "@/lib/data/errors";
-import { uploadModuleTarball, deleteObject } from "@/lib/storage/r2";
+import { uploadModuleTarball, deleteObject } from "@/lib/storage";
 import { requireAuth } from "@/lib/auth/middleware";
 import { MAX_MODULE_SIZE } from "@/lib/validation/limits";
 

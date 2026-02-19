@@ -24,7 +24,7 @@ import {
   uploadShasumsSignature,
   deleteByPrefix,
   deleteObject,
-} from "@/lib/storage/r2";
+} from "@/lib/storage";
 import { isUniqueConstraintError } from "@/lib/data/errors";
 import { requireAuth } from "@/lib/auth/middleware";
 import { MAX_PROVIDER_ZIP_SIZE } from "@/lib/validation/limits";

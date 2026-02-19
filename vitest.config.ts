@@ -7,7 +7,7 @@ export default defineConfig({
   test: {
     environment: "happy-dom",
     globals: true,
-    setupFiles: [],
+    setupFiles: ["./__tests__/lib/storage/setup-require-ts.ts"],
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
@@ -23,6 +23,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./"),
+      "server-only": path.resolve(__dirname, "./__mocks__/server-only.ts"),
     },
   },
 });

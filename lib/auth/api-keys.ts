@@ -140,6 +140,7 @@ export async function createApiKey(params: {
   description?: string;
   permissions?: string[];
   expiresAt?: Date;
+  userId?: number;
 }): Promise<{ key: string; record: ApiKey }> {
   const key = generateApiKey();
   const hash = await hashApiKey(key);
@@ -153,6 +154,7 @@ export async function createApiKey(params: {
       description: params.description ?? null,
       permissions: params.permissions ?? null,
       expiresAt: params.expiresAt ?? null,
+      userId: params.userId ?? null,
     })
     .returning();
 

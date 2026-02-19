@@ -1,143 +1,78 @@
+/**
+ * Cloudflare R2 storage backend.
+ *
+ * Used in production and preview (Cloudflare Workers).
+ * Requires the MODULES_STORAGE R2 bucket binding from wrangler.jsonc.
+ */
+
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { generateModuleKey, generateProviderKey } from "./keys";
 
-/**
- * Get the R2 bucket binding for module/provider artifact storage.
- */
-function getBucket() {
-  const { env } = getCloudflareContext();
-  return env.MODULES_STORAGE as R2Bucket;
+import type {
+  StorageBackend,
+  StorageObject,
+  PutOptions,
+  ListResult,
+} from "./types";
+
+/** Adapt an R2ObjectBody to the StorageObject interface. */
+function wrapR2Object(obj: R2ObjectBody): StorageObject {
+  return {
+    get body(): ReadableStream {
+      return obj.body as ReadableStream;
+    },
+    text: () => obj.text(),
+    arrayBuffer: () => obj.arrayBuffer(),
+  };
 }
 
 /**
- * Upload a module tarball to R2.
- * Returns the R2 key.
+ * Cloudflare R2 storage backend.
  */
-export async function uploadModuleTarball(
-  namespace: string,
-  name: string,
-  provider: string,
-  version: string,
-  data: ArrayBuffer | ReadableStream,
-): Promise<string> {
-  const bucket = getBucket();
-  const key = generateModuleKey(namespace, name, provider, version);
+export class R2Backend implements StorageBackend {
+  private getBucket(): R2Bucket {
+    const { env } = getCloudflareContext();
+    return env.MODULES_STORAGE as R2Bucket;
+  }
 
-  await bucket.put(key, data, {
-    httpMetadata: { contentType: "application/gzip" },
-    customMetadata: { namespace, name, provider, version },
-  });
+  async put(
+    key: string,
+    data: ArrayBuffer | ReadableStream | string,
+    options?: PutOptions,
+  ): Promise<void> {
+    const bucket = this.getBucket();
+    await bucket.put(key, data as ArrayBuffer, {
+      httpMetadata: options?.httpMetadata,
+      customMetadata: options?.customMetadata,
+    });
+  }
 
-  return key;
-}
+  async get(key: string): Promise<StorageObject | null> {
+    const bucket = this.getBucket();
+    const obj = await bucket.get(key);
+    if (!obj) return null;
+    return wrapR2Object(obj);
+  }
 
-/**
- * Get a module tarball from R2.
- * Returns the R2ObjectBody or null if not found.
- */
-export async function getModuleTarball(
-  key: string,
-): Promise<R2ObjectBody | null> {
-  const bucket = getBucket();
-  return bucket.get(key);
-}
+  async delete(keys: string | string[]): Promise<void> {
+    const bucket = this.getBucket();
+    await bucket.delete(keys as string);
+  }
 
-/**
- * Upload a provider zip archive to R2.
- * Returns the R2 key.
- */
-export async function uploadProviderZip(
-  namespace: string,
-  type: string,
-  version: string,
-  os: string,
-  arch: string,
-  data: ArrayBuffer | ReadableStream,
-): Promise<string> {
-  const bucket = getBucket();
-  const key = generateProviderKey(namespace, type, version, os, arch);
-
-  await bucket.put(key, data, {
-    httpMetadata: { contentType: "application/zip" },
-    customMetadata: { namespace, type, version, os, arch },
-  });
-
-  return key;
-}
-
-/**
- * Upload SHA256SUMS file for a provider version.
- */
-export async function uploadShasums(
-  namespace: string,
-  type: string,
-  version: string,
-  data: string,
-): Promise<string> {
-  const bucket = getBucket();
-  const key = `providers/${namespace}/${type}/${version}/SHA256SUMS`;
-
-  await bucket.put(key, data, {
-    httpMetadata: { contentType: "text/plain" },
-  });
-
-  return key;
-}
-
-/**
- * Upload SHA256SUMS.sig for a provider version.
- */
-export async function uploadShasumsSignature(
-  namespace: string,
-  type: string,
-  version: string,
-  data: ArrayBuffer,
-): Promise<string> {
-  const bucket = getBucket();
-  const key = `providers/${namespace}/${type}/${version}/SHA256SUMS.sig`;
-
-  await bucket.put(key, data, {
-    httpMetadata: { contentType: "application/pgp-signature" },
-  });
-
-  return key;
-}
-
-/**
- * Get any object from R2 by key.
- */
-export async function getObject(key: string): Promise<R2ObjectBody | null> {
-  const bucket = getBucket();
-  return bucket.get(key);
-}
-
-/**
- * Delete an object from R2 by key.
- */
-export async function deleteObject(key: string): Promise<void> {
-  const bucket = getBucket();
-  await bucket.delete(key);
-}
-
-/**
- * Delete all R2 objects whose keys start with the given prefix.
- * Used for cleaning up all artifacts for a provider version.
- * Returns the number of objects deleted.
- */
-export async function deleteByPrefix(prefix: string): Promise<number> {
-  const bucket = getBucket();
-  let cursor: string | undefined;
-  let deleted = 0;
-
-  do {
-    const listed = await bucket.list({ prefix, cursor });
-    if (listed.objects.length > 0) {
-      const keys = listed.objects.map((obj) => obj.key);
-      await bucket.delete(keys);
-      deleted += keys.length;
-    }
-    cursor = listed.truncated ? listed.cursor : undefined;
-  } while (cursor);
-
-  return deleted;
+  async list(options?: {
+    prefix?: string;
+    cursor?: string;
+    limit?: number;
+  }): Promise<ListResult> {
+    const bucket = this.getBucket();
+    const result = await bucket.list({
+      prefix: options?.prefix,
+      cursor: options?.cursor,
+      limit: options?.limit,
+    });
+    return {
+      objects: result.objects.map((o) => ({ key: o.key })),
+      truncated: result.truncated,
+      cursor: result.truncated ? result.cursor : undefined,
+    };
+  }
 }

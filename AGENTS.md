@@ -23,8 +23,10 @@ pnpm cf-typegen       # Generate CloudflareEnv types
 
 # Database (Drizzle + D1)
 pnpm db:generate      # Generate migrations from schema
-pnpm db:migrate       # Run migrations
-pnpm db:push          # Push schema directly
+pnpm db:setup         # Apply migrations locally (via wrangler d1 execute)
+pnpm db:setup:remote  # Apply migrations to remote D1
+pnpm db:reset         # Reset local database (wipes .wrangler/ state)
+pnpm db:reset:remote  # Full reset of remote D1 (DESTRUCTIVE)
 pnpm db:studio        # Drizzle Studio
 ```
 
@@ -151,8 +153,11 @@ lib/
 
 - Env validation via Zod in `lib/env.ts`.
 - Cloudflare bindings: `DB` (D1), `MODULES_STORAGE` (R2), `ASSETS`, `WORKER_SELF_REFERENCE`.
-- Local dev bindings via `.dev.vars` (gitignored).
-- NEVER commit `.env`, `.dev.vars`, or any secrets.
+- `.env` is gitignored — copy `.env.example` to `.env` for local development defaults.
+- `.env.local` overrides `.env` and is also gitignored — use for secrets and personal overrides.
+- `.dev.vars` is gitignored — used by Wrangler for `pnpm preview` bindings.
+- `.env.example` is committed as a template with all available options.
+- NEVER commit `.env`, `.env.local`, `.dev.vars`, or any secrets.
 
 ### Testing
 

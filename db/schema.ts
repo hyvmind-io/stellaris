@@ -154,9 +154,96 @@ export const apiKeys = sqliteTable(
       .$defaultFn(() => new Date()),
     lastUsedAt: integer("last_used_at", { mode: "timestamp" }),
     expiresAt: integer("expires_at", { mode: "timestamp" }),
+    userId: integer("user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
   },
   (table) => [index("api_keys_hash_idx").on(table.keyHash)],
 );
 
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type NewApiKey = typeof apiKeys.$inferInsert;
+
+// ============================================================================
+// Users
+// ============================================================================
+
+export const users = sqliteTable(
+  "users",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    email: text("email").notNull().unique(),
+    username: text("username").notNull().unique(),
+    displayName: text("display_name"),
+    passwordHash: text("password_hash").notNull(),
+    role: text("role", { enum: ["admin", "user", "guest"] })
+      .notNull()
+      .default("guest"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    lastLoginAt: integer("last_login_at", { mode: "timestamp" }),
+  },
+  (table) => [
+    uniqueIndex("users_email_unique_idx").on(table.email),
+    uniqueIndex("users_username_unique_idx").on(table.username),
+  ],
+);
+
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
+
+// ============================================================================
+// Sessions
+// ============================================================================
+
+export const sessions = sqliteTable(
+  "sessions",
+  {
+    id: text("id").primaryKey(), // crypto.randomUUID()
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [
+    index("sessions_user_idx").on(table.userId),
+    index("sessions_expires_idx").on(table.expiresAt),
+  ],
+);
+
+export type Session = typeof sessions.$inferSelect;
+
+// ============================================================================
+// Rate Limits
+// ============================================================================
+
+export const rateLimits = sqliteTable("rate_limits", {
+  key: text("key").primaryKey(), // e.g., "login:email:user@example.com"
+  count: integer("count").notNull().default(0),
+  windowStart: integer("window_start", { mode: "timestamp" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+});
+
+// ============================================================================
+// System Settings
+// ============================================================================
+
+export const systemSettings = sqliteTable("system_settings", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  key: text("key").notNull().unique(),
+  value: text("value").notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+});
+
+export type SystemSetting = typeof systemSettings.$inferSelect;
+export type NewSystemSetting = typeof systemSettings.$inferInsert;

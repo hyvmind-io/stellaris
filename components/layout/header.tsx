@@ -2,8 +2,13 @@ import Link from "next/link";
 import { Terminal } from "lucide-react";
 import { NavLink } from "./nav-link";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Button } from "@/components/ui/button";
+import { UserMenu } from "./user-menu";
+import { getAuth } from "@/lib/auth/get-auth";
 
-export function Header() {
+export async function Header() {
+  const auth = await getAuth();
+
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/80 backdrop-blur-sm">
       <div className="container mx-auto flex h-14 items-center px-4">
@@ -22,11 +27,21 @@ export function Header() {
           </NavLink>
           <NavLink href="/modules">Modules</NavLink>
           <NavLink href="/providers">Providers</NavLink>
+          {auth?.user.role === "admin" && (
+            <NavLink href="/admin/users">Admin</NavLink>
+          )}
         </nav>
 
         {/* Actions */}
         <div className="flex items-center gap-2">
           <ThemeToggle />
+          {auth ? (
+            <UserMenu user={auth.user} />
+          ) : (
+            <Button asChild variant="secondary" size="sm">
+              <Link href="/login">Sign in</Link>
+            </Button>
+          )}
         </div>
       </div>
     </header>

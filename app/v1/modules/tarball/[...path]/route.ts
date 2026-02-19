@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { notFound, internalError } from "@/lib/api/errors";
 import { binaryResponse } from "@/lib/api/response";
-import { getModuleTarball } from "@/lib/storage/r2";
+import { getModuleTarball } from "@/lib/storage";
 import { parseModuleKey } from "@/lib/storage/keys";
 import { incrementModuleDownloads } from "@/lib/data/modules";
 import { requireAuth } from "@/lib/auth/middleware";
