@@ -14,7 +14,6 @@ import { jsonResponse, noContentResponse } from "@/lib/api/response";
 import { findModule, saveModule, deleteModule } from "@/lib/data/modules";
 import { isUniqueConstraintError } from "@/lib/data/errors";
 import { uploadModuleTarball, deleteObject } from "@/lib/storage/r2";
-import { generateModuleKey } from "@/lib/storage/keys";
 import { requireAuth } from "@/lib/auth/middleware";
 import { MAX_MODULE_SIZE } from "@/lib/validation/limits";
 
@@ -96,6 +95,17 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return conflict(
         `Module ${namespace}/${name}/${system} version ${version} already exists`,
       );
+    }
+
+    // Pre-check Content-Length to reject oversized requests before parsing formData
+    const contentLength = request.headers.get("Content-Length");
+    if (contentLength) {
+      const size = Number(contentLength);
+      if (!Number.isNaN(size) && size > MAX_MODULE_SIZE) {
+        return badRequest(
+          `Request body exceeds maximum module size of ${MAX_MODULE_SIZE / (1024 * 1024)} MB`,
+        );
+      }
     }
 
     const formData = await request.formData();
@@ -195,12 +205,15 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Clean up R2 tarball (best-effort)
-    try {
-      const key = generateModuleKey(namespace, name, system, version);
-      await deleteObject(key);
-    } catch {
-      // Best-effort R2 cleanup
+    // Clean up R2 tarball (best-effort).
+    // Use the stored R2 key from the database record rather than regenerating it.
+    // This is more resilient to future key format changes.
+    if (deleted.location) {
+      try {
+        await deleteObject(deleted.location);
+      } catch {
+        // Best-effort R2 cleanup
+      }
     }
 
     return noContentResponse({});

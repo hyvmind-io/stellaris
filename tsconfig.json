@@ -9,6 +9,7 @@
     "noUnusedParameters": true,
     "noUncheckedIndexedAccess": true,
     "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",

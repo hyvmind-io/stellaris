@@ -145,6 +145,12 @@ export async function POST(request: NextRequest) {
           return { ok: false, status: "unauthorized" };
         }
 
+        // NOTE: This uses a direct DB equality check rather than the timingSafeEqual
+        // defense-in-depth layer from validateApiKey(). We cannot call validateApiKey
+        // here because it queries the DB outside this transaction context. Risk is
+        // minimal: both values are SHA-256 hashes (not raw keys), and the DB index
+        // comparison on 64-char hex strings has negligible timing leakage.
+        // lastUsedAt is not updated here to keep the transaction minimal.
         const existing = await tx
           .select()
           .from(apiKeys)

@@ -23,8 +23,8 @@ export default async function ModulesPage({
   }>;
 }) {
   const params = await searchParams;
-  const offset = params.offset ? Number(params.offset) : 0;
-  const limit = params.limit ? Number(params.limit) : 15;
+  const offset = Math.max(0, Number(params.offset) || 0);
+  const limit = Math.min(100, Math.max(1, Number(params.limit) || 15));
 
   let modules: Awaited<ReturnType<typeof browseModules>>["modules"] = [];
   let meta = { offset, limit, total: 0 };
