@@ -10,7 +10,8 @@ import {
   validationError,
   internalError,
 } from "@/lib/api/errors";
-import { noContentResponse } from "@/lib/api/response";
+import { jsonResponse, noContentResponse } from "@/lib/api/response";
+import { updateApiKeyBody } from "@/lib/validation/registry";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -80,6 +81,83 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     return noContentResponse({});
   } catch (error) {
     console.error("Error revoking API key:", error);
+    return internalError();
+  }
+}
+
+/**
+ * PATCH /v1/api-keys/:id
+ *
+ * Update an API key's name and/or permissions.
+ * Requires admin permission.
+ *
+ * Body JSON (at least one field required):
+ *   - name: string (optional, 1-255 chars)
+ *   - permissions: string[] (optional, min 1 element)
+ *
+ * Returns the updated key metadata on success, 404 if not found.
+ */
+export async function PATCH(request: NextRequest, { params }: RouteParams) {
+  try {
+    const auth = await requireAuth(request, "admin");
+    if (auth instanceof Response) return auth;
+
+    const { id: rawId } = await params;
+    const parsedId = z.coerce.number().int().positive().safeParse(rawId);
+    if (!parsedId.success) {
+      return validationError(parsedId.error.issues);
+    }
+
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return badRequest("Invalid JSON body");
+    }
+
+    const parsed = updateApiKeyBody.safeParse(body);
+    if (!parsed.success) {
+      return validationError(parsed.error.issues);
+    }
+
+    const db = getDb();
+
+    // Check key exists
+    const existing = await db
+      .select()
+      .from(apiKeys)
+      .where(eq(apiKeys.id, parsedId.data))
+      .get();
+
+    if (!existing) {
+      return notFound(`API key ${parsedId.data} not found`);
+    }
+
+    // Build update set
+    const updateSet: Record<string, unknown> = {};
+    if (parsed.data.name !== undefined)
+      updateSet.name = parsed.data.name.trim();
+    if (parsed.data.permissions !== undefined)
+      updateSet.permissions = parsed.data.permissions;
+
+    // Perform update
+    const [updated] = await db
+      .update(apiKeys)
+      .set(updateSet)
+      .where(eq(apiKeys.id, parsedId.data))
+      .returning();
+
+    return jsonResponse({
+      id: updated!.id,
+      name: updated!.name,
+      description: updated!.description,
+      permissions: updated!.permissions,
+      created_at: updated!.createdAt.toISOString(),
+      last_used_at: updated!.lastUsedAt?.toISOString() ?? null,
+      expires_at: updated!.expiresAt?.toISOString() ?? null,
+    });
+  } catch (error) {
+    console.error("Error updating API key:", error);
     return internalError();
   }
 }

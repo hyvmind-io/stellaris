@@ -156,6 +156,8 @@ lib/
 - `.env` is gitignored — copy `.env.example` to `.env` for local development defaults.
 - `.env.local` overrides `.env` and is also gitignored — use for secrets and personal overrides.
 - `.dev.vars` is gitignored — used by Wrangler for `pnpm preview` bindings.
+- `PRIVATE_REGISTRY` controls whether all routes require authentication (`"true"`, the default) or only admin/protected routes (`"false"`). Read via `process.env` in middleware (Edge runtime).
+- `PRIVATE_REGISTRY_MODE` controls artifact-route authentication: `"relaxed"` (default) leaves tarball/zip/SHA256SUMS routes public; `"strict"` requires Bearer auth on those routes too (requires stellaris-auth proxy). Validated via Zod in `lib/env.ts`; helper in `lib/auth/registry-mode.ts`.
 - `.env.example` is committed as a template with all available options.
 - NEVER commit `.env`, `.env.local`, `.dev.vars`, or any secrets.
 
@@ -164,7 +166,7 @@ lib/
 - Vitest with happy-dom environment, globals enabled.
 - Path alias `@/` resolved via vitest.config.ts.
 - Test files: `*.test.ts` or `*.test.tsx` colocated or in `__tests__/`.
-- No tests exist yet — when adding, follow Vitest conventions with `describe`/`it`/`expect`.
+- Follow Vitest conventions with `describe`/`it`/`expect`. Test files in `__tests__/` mirror source structure.
 
 ### Cloudflare Workers Constraints
 

@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { PermissionBadges } from "./permission-badges";
 
 // ============================================================================
 // Component Props
@@ -24,6 +25,7 @@ interface KeyDisplayDialogProps {
   onOpenChange: (open: boolean) => void;
   keyName: string;
   plainTextKey: string;
+  permissions?: string[];
 }
 
 // ============================================================================
@@ -41,6 +43,7 @@ export function KeyDisplayDialog({
   onOpenChange,
   keyName,
   plainTextKey,
+  permissions,
 }: KeyDisplayDialogProps) {
   const [copied, setCopied] = useState(false);
 
@@ -118,6 +121,13 @@ export function KeyDisplayDialog({
               </code>
             </p>
           </div>
+
+          {permissions && permissions.length > 0 && (
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Permissions</label>
+              <PermissionBadges permissions={permissions} />
+            </div>
+          )}
         </div>
 
         <DialogFooter className="sm:justify-between">

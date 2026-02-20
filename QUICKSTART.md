@@ -18,10 +18,11 @@ pnpm dev   # → http://localhost:3000
 ### Reset local database (if needed)
 
 ```bash
-pnpm db:reset
+pnpm db:reset    # wipes .wrangler/ state only
+pnpm db:setup    # re-applies migrations
 ```
 
-This wipes `.wrangler/` and re-applies all migrations from scratch.
+`db:reset` only deletes the local database files. Run `db:setup` afterwards to re-apply migrations.
 
 ### Generate additional API keys
 
@@ -42,10 +43,11 @@ pnpm db:create-key --name "prod-ci" --permissions '["publish"]' --remote
 This inserts a key directly into the D1 database via wrangler (no running server needed).
 Run `pnpm db:create-key --help` for all options.
 
-The setup script creates a well-known dev API key:
+After setup, create an API key for local development:
 
-```
-stlr_0000000000000000000000000000000000000dev
+```bash
+pnpm db:create-key --name "local-admin" --permissions '["admin"]'
+# Save the output key — you'll need it for all authenticated requests
 ```
 
 ## Verify service discovery
@@ -95,7 +97,7 @@ tar -czf my-module.tar.gz \
 
 ```bash
 curl -X POST http://localhost:3000/v1/modules/myorg/hello/aws/1.0.0 \
-  -H "Authorization: Bearer stlr_0000000000000000000000000000000000000dev" \
+  -H "Authorization: Bearer <your-api-key>" \
   -F "module=@./my-module.tar.gz" \
   -F "owner=platform-team"
 ```
@@ -231,7 +233,7 @@ DARWIN_SHA=$(grep darwin_arm64 SHA256SUMS | awk '{print $1}')
 
 ```bash
 curl -X POST http://localhost:3000/v1/providers/myorg/example/1.0.0 \
-  -H "Authorization: Bearer stlr_0000000000000000000000000000000000000dev" \
+  -H "Authorization: Bearer <your-api-key>" \
   -F "data={
     \"protocols\": [\"6.0\"],
     \"platforms\": [
@@ -323,15 +325,15 @@ curl http://localhost:3000/v1/api-keys \
 
 ## Quick Reference: pnpm Scripts
 
-| Command                | Description                                        |
-| ---------------------- | -------------------------------------------------- |
-| `pnpm db:setup`        | Apply migrations + create dev API key (local)      |
-| `pnpm db:reset`        | Wipe `.wrangler/` and re-setup (local)             |
-| `pnpm db:create-key`   | Generate a new API key (local or `--remote`)       |
-| `pnpm db:setup:remote` | Apply migrations to remote D1                      |
-| `pnpm db:reset:remote` | Drop all tables + re-setup remote D1 (destructive) |
-| `pnpm db:generate`     | Generate Drizzle migrations from schema            |
-| `pnpm db:studio`       | Open Drizzle Studio (visual DB browser)            |
+| Command                | Description                                  |
+| ---------------------- | -------------------------------------------- |
+| `pnpm db:setup`        | Apply migrations to local D1 database        |
+| `pnpm db:reset`        | Wipe `.wrangler/` local database state       |
+| `pnpm db:create-key`   | Generate a new API key (local or `--remote`) |
+| `pnpm db:setup:remote` | Apply migrations to remote D1                |
+| `pnpm db:reset:remote` | Drop all remote D1 tables (destructive)      |
+| `pnpm db:generate`     | Generate Drizzle migrations from schema      |
+| `pnpm db:studio`       | Open Drizzle Studio (visual DB browser)      |
 
 ## Quick Reference: Validation Rules
 

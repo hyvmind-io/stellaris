@@ -26,6 +26,7 @@ export interface ApiKeyData {
   id: number;
   name: string;
   description: string | null;
+  permissions: string[];
   createdAt: Date;
   lastUsedAt: Date | null;
   expiresAt: Date | null;

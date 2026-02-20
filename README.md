@@ -93,17 +93,15 @@ CLOUDFLARE_D1_TOKEN=your_d1_token
 ### 4. Initialize the local database
 
 ```bash
-# Apply migrations and create a local dev API key
+# Apply migrations to local D1 database
 bash scripts/setup-local-db.sh
 ```
 
-This creates all tables in the local D1 database and bootstraps a development API key:
+This creates all tables in the local D1 database. After setup, create an API key:
 
+```bash
+pnpm db:create-key --name "local-admin" --permissions '["admin"]'
 ```
-stlr_0000000000000000000000000000000000000dev
-```
-
-> **Warning:** This key is for local development only. Never use it in production.
 
 ### 5. Start the dev server
 
@@ -393,7 +391,7 @@ stellaris/
 │   ├── validation/             #   Zod schemas for all routes
 │   └── utils/                  #   Version comparison, general utilities
 ├── scripts/                    # Setup scripts
-│   └── setup-local-db.sh       #   Local D1 + dev API key bootstrap
+│   └── setup-local-db.sh       #   Local D1 migration runner
 ├── __tests__/                  # Vitest test suites
 ├── wrangler.jsonc              # Cloudflare Workers config
 ├── open-next.config.ts         # OpenNext.js adapter config
@@ -454,7 +452,7 @@ pnpm db:setup:remote
 │  │  │ Metadata │          │  Storage)    │               │   │
 │  │  └──────────┘          └──────────────┘               │   │
 │  │   5 tables:              Artifacts:                    │   │
-│  │   modules                modules/*.tar.gz              │   │
+│  │   modules                {ns}/{name}/{prov}/*.tar.gz   │   │
 │  │   providers              providers/*.zip               │   │
 │  │   provider_platforms     SHA256SUMS                     │   │
 │  │   gpg_public_keys        SHA256SUMS.sig                │   │

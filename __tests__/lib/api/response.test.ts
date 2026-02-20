@@ -265,9 +265,8 @@ describe("moduleDownloadResponse", () => {
     expect(body).toEqual({ location });
   });
 
-  it("encodes a deep tarball path correctly", async () => {
-    const location =
-      "/v1/modules/tarball/hashicorp/consul/aws/0.1.0/consul-aws-0.1.0.tar.gz";
+  it("encodes a realistic tarball path correctly", async () => {
+    const location = "/v1/modules/tarball/hashicorp/consul/aws/0.1.0.tar.gz";
     const response = moduleDownloadResponse(location);
     expect(response.headers.get("X-Terraform-Get")).toBe(location);
     const body = await response.json();

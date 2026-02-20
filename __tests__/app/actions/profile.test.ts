@@ -51,11 +51,13 @@ vi.mock("@/lib/data/users", () => ({
 const mockCreateUserApiKey = vi.fn<AnyFn>();
 const mockGetUserApiKeys = vi.fn<AnyFn>();
 const mockDeleteUserApiKey = vi.fn<AnyFn>();
+const mockUpdateUserApiKey = vi.fn<AnyFn>();
 
 vi.mock("@/lib/data/api-keys", () => ({
   createUserApiKey: (...args: unknown[]) => mockCreateUserApiKey(...args),
   getUserApiKeys: (...args: unknown[]) => mockGetUserApiKeys(...args),
   deleteUserApiKey: (...args: unknown[]) => mockDeleteUserApiKey(...args),
+  updateUserApiKey: (...args: unknown[]) => mockUpdateUserApiKey(...args),
 }));
 
 import {
@@ -64,6 +66,7 @@ import {
   createApiKeyAction,
   listApiKeysAction,
   deleteApiKeyAction,
+  updateApiKeyAction,
 } from "@/app/actions/profile";
 
 // ============================================================================
@@ -113,6 +116,7 @@ const apiKeyData = {
   id: 10,
   name: "my-key",
   description: null,
+  permissions: ["admin"],
   createdAt: NOW,
   lastUsedAt: null,
   expiresAt: null,
@@ -364,7 +368,7 @@ describe("createApiKeyAction", () => {
   it("returns error when not authenticated", async () => {
     mockGetAuth.mockResolvedValue(null);
 
-    const result = await createApiKeyAction("my-key");
+    const result = await createApiKeyAction({ name: "my-key" });
 
     expect(result).toEqual({ success: false, error: "Not authenticated" });
     expect(mockCreateUserApiKey).not.toHaveBeenCalled();
@@ -373,7 +377,7 @@ describe("createApiKeyAction", () => {
   it("returns error when user is a guest", async () => {
     mockGetAuth.mockResolvedValue(guestAuthResult);
 
-    const result = await createApiKeyAction("my-key");
+    const result = await createApiKeyAction({ name: "my-key" });
 
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/Guests cannot create API keys/);
@@ -383,7 +387,7 @@ describe("createApiKeyAction", () => {
   it("returns validation error for empty name", async () => {
     mockGetAuth.mockResolvedValue(userAuthResult);
 
-    const result = await createApiKeyAction("");
+    const result = await createApiKeyAction({ name: "" });
 
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/Key name is required/);
@@ -393,7 +397,7 @@ describe("createApiKeyAction", () => {
   it("returns validation error for name exceeding 100 characters", async () => {
     mockGetAuth.mockResolvedValue(userAuthResult);
 
-    const result = await createApiKeyAction("x".repeat(101));
+    const result = await createApiKeyAction({ name: "x".repeat(101) });
 
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/100 characters/);
@@ -407,12 +411,16 @@ describe("createApiKeyAction", () => {
       plainTextKey: "stlr_abc123",
     });
 
-    const result = await createApiKeyAction("my-key");
+    const result = await createApiKeyAction({ name: "my-key" });
 
     expect(result.success).toBe(true);
     expect(result.key).toEqual(apiKeyData);
     expect(result.plainTextKey).toBe("stlr_abc123");
-    expect(mockCreateUserApiKey).toHaveBeenCalledWith(regularUser.id, "my-key");
+    expect(mockCreateUserApiKey).toHaveBeenCalledWith(
+      regularUser.id,
+      "my-key",
+      undefined,
+    );
   });
 
   it("allows non-guest authenticated users (admin) to create keys", async () => {
@@ -422,12 +430,37 @@ describe("createApiKeyAction", () => {
       plainTextKey: "stlr_admin_key",
     });
 
-    const result = await createApiKeyAction("admin-key");
+    const result = await createApiKeyAction({ name: "admin-key" });
 
     expect(result.success).toBe(true);
     expect(mockCreateUserApiKey).toHaveBeenCalledWith(
       adminUser.id,
       "admin-key",
+      undefined,
+    );
+  });
+
+  it("passes custom permissions to createUserApiKey", async () => {
+    mockGetAuth.mockResolvedValue(userAuthResult);
+    const customKeyData = {
+      ...apiKeyData,
+      permissions: ["modules:read", "providers:read"],
+    };
+    mockCreateUserApiKey.mockResolvedValue({
+      key: customKeyData,
+      plainTextKey: "stlr_custom",
+    });
+
+    const result = await createApiKeyAction({
+      name: "read-only",
+      permissions: ["modules:read", "providers:read"],
+    });
+
+    expect(result.success).toBe(true);
+    expect(mockCreateUserApiKey).toHaveBeenCalledWith(
+      regularUser.id,
+      "read-only",
+      ["modules:read", "providers:read"],
     );
   });
 
@@ -435,7 +468,7 @@ describe("createApiKeyAction", () => {
     mockGetAuth.mockResolvedValue(userAuthResult);
     mockCreateUserApiKey.mockRejectedValue(new Error("DB error"));
 
-    const result = await createApiKeyAction("my-key");
+    const result = await createApiKeyAction({ name: "my-key" });
 
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/Failed to create API key/);
@@ -549,5 +582,128 @@ describe("deleteApiKeyAction", () => {
     await deleteApiKeyAction(10);
 
     expect(mockDeleteUserApiKey).toHaveBeenCalledWith(10, adminUser.id);
+  });
+});
+
+// ============================================================================
+// updateApiKeyAction
+// ============================================================================
+
+describe("updateApiKeyAction", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns error when not authenticated", async () => {
+    mockGetAuth.mockResolvedValue(null);
+
+    const result = await updateApiKeyAction(10, { name: "updated" });
+
+    expect(result).toEqual({ success: false, error: "Not authenticated" });
+    expect(mockUpdateUserApiKey).not.toHaveBeenCalled();
+  });
+
+  it("returns error for invalid key ID", async () => {
+    mockGetAuth.mockResolvedValue(userAuthResult);
+
+    const result = await updateApiKeyAction(0, { name: "updated" });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Invalid key ID");
+    expect(mockUpdateUserApiKey).not.toHaveBeenCalled();
+  });
+
+  it("returns validation error when no fields provided", async () => {
+    mockGetAuth.mockResolvedValue(userAuthResult);
+
+    const result = await updateApiKeyAction(10, {});
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBeTruthy();
+    expect(mockUpdateUserApiKey).not.toHaveBeenCalled();
+  });
+
+  it("updates name successfully", async () => {
+    mockGetAuth.mockResolvedValue(userAuthResult);
+    const updated = { ...apiKeyData, name: "renamed" };
+    mockUpdateUserApiKey.mockResolvedValue(updated);
+
+    const result = await updateApiKeyAction(10, { name: "renamed" });
+
+    expect(result.success).toBe(true);
+    expect(result.key).toEqual(updated);
+    expect(mockUpdateUserApiKey).toHaveBeenCalledWith(10, regularUser.id, {
+      name: "renamed",
+    });
+  });
+
+  it("updates permissions successfully", async () => {
+    mockGetAuth.mockResolvedValue(userAuthResult);
+    const updated = {
+      ...apiKeyData,
+      permissions: ["modules:read", "modules:write"],
+    };
+    mockUpdateUserApiKey.mockResolvedValue(updated);
+
+    const result = await updateApiKeyAction(10, {
+      permissions: ["modules:read", "modules:write"],
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.key!.permissions).toEqual(["modules:read", "modules:write"]);
+    expect(mockUpdateUserApiKey).toHaveBeenCalledWith(10, regularUser.id, {
+      permissions: ["modules:read", "modules:write"],
+    });
+  });
+
+  it("updates both name and permissions", async () => {
+    mockGetAuth.mockResolvedValue(userAuthResult);
+    const updated = {
+      ...apiKeyData,
+      name: "new-name",
+      permissions: ["providers:read"],
+    };
+    mockUpdateUserApiKey.mockResolvedValue(updated);
+
+    const result = await updateApiKeyAction(10, {
+      name: "new-name",
+      permissions: ["providers:read"],
+    });
+
+    expect(result.success).toBe(true);
+    expect(mockUpdateUserApiKey).toHaveBeenCalledWith(10, regularUser.id, {
+      name: "new-name",
+      permissions: ["providers:read"],
+    });
+  });
+
+  it("returns error when key not found or not owned", async () => {
+    mockGetAuth.mockResolvedValue(userAuthResult);
+    mockUpdateUserApiKey.mockResolvedValue(null);
+
+    const result = await updateApiKeyAction(999, { name: "test" });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/Key not found or you do not have permission/);
+  });
+
+  it("returns error when updateUserApiKey throws", async () => {
+    mockGetAuth.mockResolvedValue(userAuthResult);
+    mockUpdateUserApiKey.mockRejectedValue(new Error("DB error"));
+
+    const result = await updateApiKeyAction(10, { name: "test" });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/Failed to update API key/);
+  });
+
+  it("returns validation error for empty permissions array", async () => {
+    mockGetAuth.mockResolvedValue(userAuthResult);
+
+    const result = await updateApiKeyAction(10, { permissions: [] });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBeTruthy();
+    expect(mockUpdateUserApiKey).not.toHaveBeenCalled();
   });
 });

@@ -86,10 +86,10 @@ describe("uploadModuleTarball", () => {
     );
 
     expect(key).toBe(generateModuleKey("myorg", "vpc", "aws", "1.2.3"));
-    expect(key).toBe("modules/myorg/vpc/aws/1.2.3.tar.gz");
+    expect(key).toBe("myorg/vpc/aws/1.2.3.tar.gz");
   });
 
-  it("key follows modules/{ns}/{name}/{provider}/{version}.tar.gz format", async () => {
+  it("key follows {ns}/{name}/{provider}/{version}.tar.gz format", async () => {
     const key = await uploadModuleTarball(
       "hashicorp",
       "consul",
@@ -98,7 +98,7 @@ describe("uploadModuleTarball", () => {
       makeBuffer(),
     );
 
-    expect(key).toBe("modules/hashicorp/consul/aws/0.5.0.tar.gz");
+    expect(key).toBe("hashicorp/consul/aws/0.5.0.tar.gz");
   });
 
   it("stored ArrayBuffer is retrievable via getModuleTarball", async () => {
@@ -278,7 +278,7 @@ describe("uploadShasumsSignature", () => {
 
 describe("getModuleTarball", () => {
   it("returns null for a missing key", async () => {
-    const result = await getModuleTarball("modules/ns/name/aws/999.0.0.tar.gz");
+    const result = await getModuleTarball("ns/name/aws/999.0.0.tar.gz");
     expect(result).toBeNull();
   });
 
@@ -350,7 +350,7 @@ describe("deleteObject", () => {
 
   it("is idempotent on missing keys (no throw)", async () => {
     await expect(
-      deleteObject("modules/ns/name/prov/999.0.0.tar.gz"),
+      deleteObject("ns/name/prov/999.0.0.tar.gz"),
     ).resolves.not.toThrow();
   });
 });
@@ -361,7 +361,7 @@ describe("deleteObject", () => {
 
 describe("deleteByPrefix", () => {
   it("returns 0 when no objects match the prefix", async () => {
-    const deleted = await deleteByPrefix("modules/nonexistent/");
+    const deleted = await deleteByPrefix("nonexistent/");
     expect(deleted).toBe(0);
   });
 
@@ -370,7 +370,7 @@ describe("deleteByPrefix", () => {
     await uploadModuleTarball("ns", "vpc", "aws", "2.0.0", makeBuffer());
     await uploadModuleTarball("ns", "ecs", "aws", "1.0.0", makeBuffer());
 
-    const deleted = await deleteByPrefix("modules/ns/vpc/");
+    const deleted = await deleteByPrefix("ns/vpc/");
     expect(deleted).toBe(2);
 
     // vpc modules deleted
@@ -435,7 +435,7 @@ describe("deleteByPrefix", () => {
       keys.push(k);
     }
 
-    const deleted = await deleteByPrefix("modules/paginate/");
+    const deleted = await deleteByPrefix("paginate/");
     expect(deleted).toBe(5);
 
     for (const k of keys) {
@@ -444,7 +444,7 @@ describe("deleteByPrefix", () => {
   });
 
   it("returns 0 and deletes nothing for empty storage", async () => {
-    const deleted = await deleteByPrefix("modules/");
+    const deleted = await deleteByPrefix("nonexistent/");
     expect(deleted).toBe(0);
   });
 });

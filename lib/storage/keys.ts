@@ -1,6 +1,9 @@
 /**
  * Generate an R2 key for a module tarball.
- * Format: modules/{namespace}/{name}/{provider}/{version}.tar.gz
+ * Format: {namespace}/{name}/{provider}/{version}.tar.gz
+ *
+ * The key does NOT include a "modules/" prefix — that prefix belongs only in
+ * the URL route structure (/v1/modules/tarball/{key}).
  */
 export function generateModuleKey(
   namespace: string,
@@ -8,7 +11,7 @@ export function generateModuleKey(
   provider: string,
   version: string,
 ): string {
-  return `modules/${namespace}/${name}/${provider}/${version}.tar.gz`;
+  return `${namespace}/${name}/${provider}/${version}.tar.gz`;
 }
 
 /**
@@ -29,7 +32,7 @@ export function generateProviderKey(
  * Parse an R2 key back into its components.
  * Inverse of generateModuleKey().
  *
- * Format: modules/{namespace}/{name}/{provider}/{version}.tar.gz
+ * Format: {namespace}/{name}/{provider}/{version}.tar.gz
  *
  * Returns null if the key does not match the expected format.
  */
@@ -40,18 +43,14 @@ export function parseModuleKey(key: string): {
   version: string;
 } | null {
   const parts = key.split("/");
-  if (
-    parts.length !== 5 ||
-    parts[0] !== "modules" ||
-    !parts[4]?.endsWith(".tar.gz")
-  ) {
+  if (parts.length !== 4 || !parts[3]?.endsWith(".tar.gz")) {
     return null;
   }
   return {
-    // Safe: length === 5 check above guarantees all indices exist
-    namespace: parts[1]!,
-    name: parts[2]!,
-    provider: parts[3]!,
-    version: parts[4]!.slice(0, -".tar.gz".length),
+    // Safe: length === 4 check above guarantees all indices exist
+    namespace: parts[0]!,
+    name: parts[1]!,
+    provider: parts[2]!,
+    version: parts[3]!.slice(0, -".tar.gz".length),
   };
 }
