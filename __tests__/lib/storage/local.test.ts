@@ -245,28 +245,28 @@ describe("LocalFileBackend — list", () => {
   });
 
   it("returns nested keys", async () => {
-    await backend.put("modules/ns/name/aws/1.0.0.tar.gz", "tarball");
-    await backend.put("modules/ns/name/aws/2.0.0.tar.gz", "tarball2");
+    await backend.put("ns/name/aws/1.0.0.tar.gz", "tarball");
+    await backend.put("ns/name/aws/2.0.0.tar.gz", "tarball2");
 
     const result = await backend.list();
     const keys = result.objects.map((o) => o.key).sort();
-    expect(keys).toContain("modules/ns/name/aws/1.0.0.tar.gz");
-    expect(keys).toContain("modules/ns/name/aws/2.0.0.tar.gz");
+    expect(keys).toContain("ns/name/aws/1.0.0.tar.gz");
+    expect(keys).toContain("ns/name/aws/2.0.0.tar.gz");
   });
 
   it("filters by prefix correctly", async () => {
-    await backend.put("modules/ns/vpc/aws/1.0.0.tar.gz", "mod1");
-    await backend.put("modules/ns/ecs/aws/1.0.0.tar.gz", "mod2");
+    await backend.put("ns/vpc/aws/1.0.0.tar.gz", "mod1");
+    await backend.put("ns/ecs/aws/1.0.0.tar.gz", "mod2");
     await backend.put("providers/hashicorp/aws/4.0.0/file.zip", "prov1");
 
-    const result = await backend.list({ prefix: "modules/" });
+    const result = await backend.list({ prefix: "ns/" });
     const keys = result.objects.map((o) => o.key);
-    expect(keys.every((k) => k.startsWith("modules/"))).toBe(true);
+    expect(keys.every((k) => k.startsWith("ns/"))).toBe(true);
     expect(keys).toHaveLength(2);
   });
 
   it("returns empty for prefix with no matching keys", async () => {
-    await backend.put("modules/ns/name/aws/1.0.0.tar.gz", "mod");
+    await backend.put("ns/name/aws/1.0.0.tar.gz", "mod");
     const result = await backend.list({ prefix: "providers/" });
     expect(result.objects).toHaveLength(0);
   });

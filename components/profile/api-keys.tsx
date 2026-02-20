@@ -4,7 +4,7 @@ import { useState, useTransition, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, Plus, Trash2, Key } from "lucide-react";
+import { Loader2, Pencil, Plus, Trash2, Key } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,8 @@ import {
   FormDescription,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import {
   Card,
   CardContent,
@@ -57,8 +59,16 @@ import {
   listApiKeysAction,
   deleteApiKeyAction,
 } from "@/app/actions/profile";
+import {
+  PERMISSIONS,
+  GRANULAR_PERMISSIONS,
+  AVAILABLE_PERMISSIONS,
+  PERMISSION_META,
+} from "@/lib/permissions";
 import type { ApiKeyData, UserRole } from "@/types/auth";
 import { KeyDisplayDialog } from "./key-display-dialog";
+import { EditKeyDialog } from "./edit-key-dialog";
+import { PermissionBadges } from "./permission-badges";
 
 // ============================================================================
 // Helpers
@@ -88,6 +98,9 @@ const createKeySchema = z.object({
     .string()
     .min(1, "Key name is required")
     .max(100, "Key name must be at most 100 characters"),
+  permissions: z
+    .array(z.string().min(1))
+    .min(1, "At least one permission must be selected"),
 });
 
 type CreateKeyValues = z.infer<typeof createKeySchema>;
@@ -120,15 +133,45 @@ export function ApiKeys({ userRole, initialKeys = [] }: ApiKeysProps) {
   const [newKey, setNewKey] = useState<{
     name: string;
     plainText: string;
+    permissions: string[];
   } | null>(null);
   const [deletingKeyId, setDeletingKeyId] = useState<number | null>(null);
+  const [editingKey, setEditingKey] = useState<ApiKeyData | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([
+    ...GRANULAR_PERMISSIONS,
+  ]);
 
   const canCreateKeys = userRole === "admin" || userRole === "user";
+
+  const availablePerms =
+    userRole === "admin" ? AVAILABLE_PERMISSIONS : GRANULAR_PERMISSIONS;
+
+  const isAdminSelected = selectedPermissions.includes(PERMISSIONS.ADMIN);
+
+  function handlePermissionToggle(perm: string, checked: boolean) {
+    if (perm === PERMISSIONS.ADMIN) {
+      setSelectedPermissions(
+        checked ? [PERMISSIONS.ADMIN] : [...GRANULAR_PERMISSIONS],
+      );
+    } else {
+      const newPerms = checked
+        ? [...selectedPermissions.filter((p) => p !== PERMISSIONS.ADMIN), perm]
+        : selectedPermissions.filter((p) => p !== perm);
+      setSelectedPermissions(newPerms);
+    }
+  }
+
+  function handleEditKey(key: ApiKeyData) {
+    setEditingKey(key);
+    setIsEditDialogOpen(true);
+  }
 
   const form = useForm<CreateKeyValues>({
     resolver: zodResolver(createKeySchema),
     defaultValues: {
       name: "",
+      permissions: [...GRANULAR_PERMISSIONS],
     },
   });
 
@@ -148,16 +191,21 @@ export function ApiKeys({ userRole, initialKeys = [] }: ApiKeysProps) {
 
   async function onCreateKey(values: CreateKeyValues) {
     startTransition(async () => {
-      const result = await createApiKeyAction(values.name);
+      const result = await createApiKeyAction({
+        name: values.name,
+        permissions: selectedPermissions,
+      });
 
       if (result.success && result.plainTextKey && result.key) {
         setNewKey({
           name: values.name,
           plainText: result.plainTextKey,
+          permissions: result.key.permissions,
         });
         setIsCreateDialogOpen(false);
         setShowKeyDialog(true);
         form.reset();
+        setSelectedPermissions([...GRANULAR_PERMISSIONS]);
         await refreshKeys();
       } else {
         toast.error("Failed to create key", {
@@ -199,7 +247,13 @@ export function ApiKeys({ userRole, initialKeys = [] }: ApiKeysProps) {
           {canCreateKeys && (
             <Dialog
               open={isCreateDialogOpen}
-              onOpenChange={setIsCreateDialogOpen}
+              onOpenChange={(open) => {
+                setIsCreateDialogOpen(open);
+                if (!open) {
+                  form.reset();
+                  setSelectedPermissions([...GRANULAR_PERMISSIONS]);
+                }
+              }}
             >
               <DialogTrigger asChild>
                 <Button size="sm" className="gap-2">
@@ -240,6 +294,47 @@ export function ApiKeys({ userRole, initialKeys = [] }: ApiKeysProps) {
                         </FormItem>
                       )}
                     />
+                    {/* Permissions */}
+                    <div className="space-y-3">
+                      <Label>Permissions</Label>
+                      <div className="space-y-2">
+                        {availablePerms.map((perm) => {
+                          const meta = PERMISSION_META[perm];
+                          const isGranularDisabledByAdmin =
+                            perm !== PERMISSIONS.ADMIN && isAdminSelected;
+                          return (
+                            <div key={perm} className="flex items-start gap-3">
+                              <Checkbox
+                                id={`create-perm-${perm}`}
+                                checked={
+                                  perm === PERMISSIONS.ADMIN
+                                    ? isAdminSelected
+                                    : isAdminSelected ||
+                                      selectedPermissions.includes(perm)
+                                }
+                                onCheckedChange={(checked) =>
+                                  handlePermissionToggle(perm, checked === true)
+                                }
+                                disabled={
+                                  isPending || isGranularDisabledByAdmin
+                                }
+                              />
+                              <label
+                                htmlFor={`create-perm-${perm}`}
+                                className="text-sm leading-none"
+                              >
+                                <span className="font-medium">
+                                  {meta.label}
+                                </span>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  {meta.description}
+                                </p>
+                              </label>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                     <DialogFooter>
                       <Button
                         type="button"
@@ -303,59 +398,81 @@ export function ApiKeys({ userRole, initialKeys = [] }: ApiKeysProps) {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
+                    <TableHead>Permissions</TableHead>
                     <TableHead>Created</TableHead>
                     <TableHead>Last Used</TableHead>
-                    <TableHead className="w-[100px]">Actions</TableHead>
+                    <TableHead className="w-[120px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {keys.map((key) => (
-                    <TableRow key={key.id}>
+                    <TableRow
+                      key={key.id}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleEditKey(key)}
+                    >
                       <TableCell className="font-medium">{key.name}</TableCell>
+                      <TableCell>
+                        <PermissionBadges permissions={key.permissions} />
+                      </TableCell>
                       <TableCell>{formatRelativeTime(key.createdAt)}</TableCell>
                       <TableCell>
                         {formatRelativeTime(key.lastUsedAt)}
                       </TableCell>
                       <TableCell>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-destructive hover:text-destructive"
-                              disabled={isPending && deletingKeyId === key.id}
-                            >
-                              {isPending && deletingKeyId === key.id ? (
-                                <Loader2 className="size-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="size-4" />
-                              )}
-                              <span className="sr-only">Delete key</span>
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete Key</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Are you sure you want to delete the key &quot;
-                                {key.name}&quot;? This action cannot be undone
-                                and any applications using this key will lose
-                                access.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel asChild>
-                                <Button variant="outline">Cancel</Button>
-                              </AlertDialogCancel>
+                        <div
+                          className="flex items-center gap-1"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => handleEditKey(key)}
+                          >
+                            <Pencil className="size-4" />
+                            <span className="sr-only">Edit key</span>
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
                               <Button
-                                variant="destructive"
-                                onClick={() => handleDeleteKey(key.id)}
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-destructive hover:text-destructive"
+                                disabled={isPending && deletingKeyId === key.id}
                               >
-                                Delete
+                                {isPending && deletingKeyId === key.id ? (
+                                  <Loader2 className="size-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="size-4" />
+                                )}
+                                <span className="sr-only">Delete key</span>
                               </Button>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete Key</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to delete the key &quot;
+                                  {key.name}&quot;? This action cannot be undone
+                                  and any applications using this key will lose
+                                  access.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel asChild>
+                                  <Button variant="outline">Cancel</Button>
+                                </AlertDialogCancel>
+                                <Button
+                                  variant="destructive"
+                                  onClick={() => handleDeleteKey(key.id)}
+                                >
+                                  Delete
+                                </Button>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -373,6 +490,18 @@ export function ApiKeys({ userRole, initialKeys = [] }: ApiKeysProps) {
           onOpenChange={setShowKeyDialog}
           keyName={newKey.name}
           plainTextKey={newKey.plainText}
+          permissions={newKey.permissions}
+        />
+      )}
+
+      {/* Edit key dialog */}
+      {editingKey && (
+        <EditKeyDialog
+          open={isEditDialogOpen}
+          onOpenChange={setIsEditDialogOpen}
+          apiKey={editingKey}
+          userRole={userRole}
+          onSuccess={refreshKeys}
         />
       )}
     </>

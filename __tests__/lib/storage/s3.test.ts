@@ -154,12 +154,12 @@ describe("S3Backend — put()", () => {
   it("sends PutObjectCommand with correct Bucket and Key for string data", async () => {
     mockSend.mockResolvedValue({});
     const backend = new S3Backend();
-    await backend.put("modules/ns/name/aws/1.0.0.tar.gz", "content");
+    await backend.put("ns/name/aws/1.0.0.tar.gz", "content");
 
     expect(PutObjectCommand).toHaveBeenCalledWith(
       expect.objectContaining({
         Bucket: "test-bucket",
-        Key: "modules/ns/name/aws/1.0.0.tar.gz",
+        Key: "ns/name/aws/1.0.0.tar.gz",
         Body: "content",
       }),
     );
@@ -268,11 +268,11 @@ describe("S3Backend — get()", () => {
   it("sends GetObjectCommand with correct Bucket and Key", async () => {
     mockSend.mockResolvedValue({ Body: makeSdkStream("data") });
     const backend = new S3Backend();
-    await backend.get("modules/ns/name/aws/1.0.0.tar.gz");
+    await backend.get("ns/name/aws/1.0.0.tar.gz");
 
     expect(GetObjectCommand).toHaveBeenCalledWith({
       Bucket: "test-bucket",
-      Key: "modules/ns/name/aws/1.0.0.tar.gz",
+      Key: "ns/name/aws/1.0.0.tar.gz",
     });
   });
 
@@ -324,11 +324,11 @@ describe("S3Backend — delete()", () => {
   it("sends DeleteObjectCommand for a single key (string form)", async () => {
     mockSend.mockResolvedValue({});
     const backend = new S3Backend();
-    await backend.delete("modules/ns/name/aws/1.0.0.tar.gz");
+    await backend.delete("ns/name/aws/1.0.0.tar.gz");
 
     expect(DeleteObjectCommand).toHaveBeenCalledWith({
       Bucket: "test-bucket",
-      Key: "modules/ns/name/aws/1.0.0.tar.gz",
+      Key: "ns/name/aws/1.0.0.tar.gz",
     });
     expect(DeleteObjectsCommand).not.toHaveBeenCalled();
     expect(mockSend).toHaveBeenCalledTimes(1);
@@ -406,8 +406,8 @@ describe("S3Backend — list()", () => {
   it("returns correct objects from S3 response", async () => {
     mockSend.mockResolvedValue({
       Contents: [
-        { Key: "modules/ns/vpc/aws/1.0.0.tar.gz" },
-        { Key: "modules/ns/ecs/aws/1.0.0.tar.gz" },
+        { Key: "ns/vpc/aws/1.0.0.tar.gz" },
+        { Key: "ns/ecs/aws/1.0.0.tar.gz" },
       ],
       IsTruncated: false,
     });
@@ -416,10 +416,10 @@ describe("S3Backend — list()", () => {
 
     expect(result.objects).toHaveLength(2);
     expect(result.objects[0]).toEqual({
-      key: "modules/ns/vpc/aws/1.0.0.tar.gz",
+      key: "ns/vpc/aws/1.0.0.tar.gz",
     });
     expect(result.objects[1]).toEqual({
-      key: "modules/ns/ecs/aws/1.0.0.tar.gz",
+      key: "ns/ecs/aws/1.0.0.tar.gz",
     });
     expect(result.truncated).toBe(false);
     expect(result.cursor).toBeUndefined();
@@ -454,10 +454,10 @@ describe("S3Backend — list()", () => {
   it("passes Prefix option to ListObjectsV2Command", async () => {
     mockSend.mockResolvedValue({ Contents: [], IsTruncated: false });
     const backend = new S3Backend();
-    await backend.list({ prefix: "modules/" });
+    await backend.list({ prefix: "ns/" });
 
     expect(ListObjectsV2Command).toHaveBeenCalledWith(
-      expect.objectContaining({ Prefix: "modules/" }),
+      expect.objectContaining({ Prefix: "ns/" }),
     );
   });
 

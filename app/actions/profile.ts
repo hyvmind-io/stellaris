@@ -15,6 +15,7 @@ import {
   createUserApiKey,
   getUserApiKeys,
   deleteUserApiKey,
+  updateUserApiKey,
 } from "@/lib/data/api-keys";
 import type { AuthUser, ApiKeyData } from "@/types/auth";
 
@@ -69,7 +70,27 @@ const createKeySchema = z.object({
     .string()
     .min(1, "Key name is required")
     .max(100, "Key name must be at most 100 characters"),
+  permissions: z
+    .array(z.string().min(1))
+    .min(1, "At least one permission must be selected")
+    .optional(),
 });
+
+const updateKeySchema = z
+  .object({
+    name: z
+      .string()
+      .min(1, "Key name is required")
+      .max(100, "Key name must be at most 100 characters")
+      .optional(),
+    permissions: z
+      .array(z.string().min(1))
+      .min(1, "At least one permission must be selected")
+      .optional(),
+  })
+  .refine((data) => data.name !== undefined || data.permissions !== undefined, {
+    message: "At least one field must be provided",
+  });
 
 // ============================================================================
 // Profile Actions
@@ -219,9 +240,10 @@ export async function changePasswordAction(data: {
  * Create a new API key for the current user.
  * Guests cannot create API keys.
  */
-export async function createApiKeyAction(
-  name: string,
-): Promise<ApiKeyActionResult> {
+export async function createApiKeyAction(data: {
+  name: string;
+  permissions?: string[];
+}): Promise<ApiKeyActionResult> {
   try {
     const auth = await getAuth();
     if (!auth) {
@@ -238,15 +260,19 @@ export async function createApiKeyAction(
     }
 
     // Validate input
-    const validated = createKeySchema.safeParse({ name });
+    const validated = createKeySchema.safeParse(data);
     if (!validated.success) {
       return {
         success: false,
-        error: validated.error.issues[0]?.message || "Invalid key name",
+        error: validated.error.issues[0]?.message || "Invalid input",
       };
     }
 
-    const result = await createUserApiKey(auth.user.id, validated.data.name);
+    const result = await createUserApiKey(
+      auth.user.id,
+      validated.data.name,
+      validated.data.permissions,
+    );
 
     return {
       success: true,
@@ -318,6 +344,61 @@ export async function deleteApiKeyAction(
     return {
       success: false,
       error: "Failed to delete API key. Please try again.",
+    };
+  }
+}
+
+// ============================================================================
+// API Key Update
+// ============================================================================
+
+/**
+ * Update an existing API key's name and/or permissions.
+ * Ownership is verified in the data layer.
+ */
+export async function updateApiKeyAction(
+  keyId: number,
+  data: { name?: string; permissions?: string[] },
+): Promise<ApiKeyActionResult> {
+  try {
+    const auth = await getAuth();
+    if (!auth) {
+      return { success: false, error: "Not authenticated" };
+    }
+
+    // Validate keyId
+    if (!keyId || typeof keyId !== "number") {
+      return { success: false, error: "Invalid key ID" };
+    }
+
+    // Validate input
+    const validated = updateKeySchema.safeParse(data);
+    if (!validated.success) {
+      return {
+        success: false,
+        error: validated.error.issues[0]?.message || "Invalid input",
+      };
+    }
+
+    const updatedKey = await updateUserApiKey(
+      keyId,
+      auth.user.id,
+      validated.data,
+    );
+
+    if (!updatedKey) {
+      return {
+        success: false,
+        error: "Key not found or you do not have permission to edit it",
+      };
+    }
+
+    return { success: true, key: updatedKey };
+  } catch (error) {
+    console.error("[Profile] Update API key error:", error);
+    return {
+      success: false,
+      error: "Failed to update API key. Please try again.",
     };
   }
 }

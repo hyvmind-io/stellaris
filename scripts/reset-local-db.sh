@@ -2,24 +2,18 @@
 #
 # Reset Local D1 Database
 #
-# Wipes the local wrangler state (D1 + R2) and reinitializes
-# the database from migrations. This is a LOCAL-ONLY operation.
+# Wipes the local Wrangler state directory (.wrangler/), which contains
+# the local D1 SQLite files and R2 object storage emulation.
+#
+# This is a LOCAL-ONLY, destructive operation. Run 'pnpm db:setup' after
+# this to reinitialize the database from migrations.
 #
 # Usage: pnpm db:reset
 #
 
 set -euo pipefail
 
-# ============================================================================
-# Configuration
-# ============================================================================
-
 WRANGLER_STATE=".wrangler"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-
-# ============================================================================
-# Wipe Local State
-# ============================================================================
 
 if [[ -d "$WRANGLER_STATE" ]]; then
     rm -rf "$WRANGLER_STATE"
@@ -28,9 +22,5 @@ else
     echo "ℹ️  No local state found — nothing to delete"
 fi
 
-# ============================================================================
-# Reinitialize
-# ============================================================================
-
 echo ""
-exec zsh "$SCRIPT_DIR/setup-local-db.sh"
+echo "✅ Local state wiped. Run 'pnpm db:setup' to reinitialize."

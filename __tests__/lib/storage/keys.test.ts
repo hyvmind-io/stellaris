@@ -12,12 +12,12 @@ import {
 describe("generateModuleKey", () => {
   it("produces the correct path structure", () => {
     const key = generateModuleKey("myorg", "vpc", "aws", "1.0.0");
-    expect(key).toBe("modules/myorg/vpc/aws/1.0.0.tar.gz");
+    expect(key).toBe("myorg/vpc/aws/1.0.0.tar.gz");
   });
 
-  it("starts with the 'modules/' prefix", () => {
+  it("starts with the namespace", () => {
     const key = generateModuleKey("ns", "name", "provider", "0.1.0");
-    expect(key).toMatch(/^modules\//);
+    expect(key).toMatch(/^ns\//);
   });
 
   it("ends with '.tar.gz'", () => {
@@ -25,60 +25,60 @@ describe("generateModuleKey", () => {
     expect(key).toMatch(/\.tar\.gz$/);
   });
 
-  it("embeds namespace in the second path segment", () => {
+  it("embeds namespace in the first path segment", () => {
     const key = generateModuleKey("acme", "app", "gcp", "2.3.4");
     const parts = key.split("/");
-    // modules / namespace / name / provider / version.tar.gz
-    expect(parts[1]).toBe("acme");
+    // namespace / name / provider / version.tar.gz
+    expect(parts[0]).toBe("acme");
   });
 
-  it("embeds name in the third path segment", () => {
+  it("embeds name in the second path segment", () => {
     const key = generateModuleKey("acme", "app", "gcp", "2.3.4");
     const parts = key.split("/");
-    expect(parts[2]).toBe("app");
+    expect(parts[1]).toBe("app");
   });
 
-  it("embeds provider in the fourth path segment", () => {
+  it("embeds provider in the third path segment", () => {
     const key = generateModuleKey("acme", "app", "gcp", "2.3.4");
     const parts = key.split("/");
-    expect(parts[3]).toBe("gcp");
+    expect(parts[2]).toBe("gcp");
   });
 
-  it("embeds versioned filename in the fifth path segment", () => {
+  it("embeds versioned filename in the fourth path segment", () => {
     const key = generateModuleKey("acme", "app", "gcp", "2.3.4");
     const parts = key.split("/");
-    expect(parts[4]).toBe("2.3.4.tar.gz");
+    expect(parts[3]).toBe("2.3.4.tar.gz");
   });
 
-  it("produces exactly 5 path segments", () => {
+  it("produces exactly 4 path segments", () => {
     const key = generateModuleKey("ns", "name", "provider", "1.0.0");
-    expect(key.split("/")).toHaveLength(5);
+    expect(key.split("/")).toHaveLength(4);
   });
 
   it("handles hyphens in the namespace", () => {
     const key = generateModuleKey("my-org", "vpc", "aws", "1.0.0");
-    expect(key).toBe("modules/my-org/vpc/aws/1.0.0.tar.gz");
+    expect(key).toBe("my-org/vpc/aws/1.0.0.tar.gz");
   });
 
   it("handles hyphens in the module name", () => {
     const key = generateModuleKey("myorg", "my-module", "aws", "1.0.0");
-    expect(key).toBe("modules/myorg/my-module/aws/1.0.0.tar.gz");
+    expect(key).toBe("myorg/my-module/aws/1.0.0.tar.gz");
   });
 
   it("handles hyphens in the provider name", () => {
     const key = generateModuleKey("myorg", "vpc", "google-cloud", "1.0.0");
-    expect(key).toBe("modules/myorg/vpc/google-cloud/1.0.0.tar.gz");
+    expect(key).toBe("myorg/vpc/google-cloud/1.0.0.tar.gz");
   });
 
   it("handles a pre-release version string", () => {
     const key = generateModuleKey("ns", "app", "provider", "1.0.0-alpha.1");
-    expect(key).toBe("modules/ns/app/provider/1.0.0-alpha.1.tar.gz");
+    expect(key).toBe("ns/app/provider/1.0.0-alpha.1.tar.gz");
   });
 
   it("handles a long namespace value", () => {
     const longNs = "a".repeat(64);
     const key = generateModuleKey(longNs, "name", "provider", "1.0.0");
-    expect(key).toBe(`modules/${longNs}/name/provider/1.0.0.tar.gz`);
+    expect(key).toBe(`${longNs}/name/provider/1.0.0.tar.gz`);
   });
 
   it("does not double any slashes", () => {
@@ -215,7 +215,7 @@ describe("generateProviderKey", () => {
 
 describe("parseModuleKey", () => {
   it("parses a valid module key", () => {
-    const result = parseModuleKey("modules/myorg/vpc/aws/1.0.0.tar.gz");
+    const result = parseModuleKey("myorg/vpc/aws/1.0.0.tar.gz");
     expect(result).toEqual({
       namespace: "myorg",
       name: "vpc",
@@ -239,11 +239,11 @@ describe("parseModuleKey", () => {
   });
 
   it("returns null for a key with wrong segment count", () => {
-    expect(parseModuleKey("modules/ns/name/1.0.0.tar.gz")).toBeNull();
+    expect(parseModuleKey("ns/name/1.0.0.tar.gz")).toBeNull();
   });
 
   it("returns null for a key that doesn't end with .tar.gz", () => {
-    expect(parseModuleKey("modules/ns/name/provider/1.0.0.zip")).toBeNull();
+    expect(parseModuleKey("ns/name/provider/1.0.0.zip")).toBeNull();
   });
 
   it("returns null for an empty string", () => {
@@ -251,9 +251,7 @@ describe("parseModuleKey", () => {
   });
 
   it("handles pre-release versions", () => {
-    const result = parseModuleKey(
-      "modules/ns/app/provider/1.0.0-alpha.1.tar.gz",
-    );
+    const result = parseModuleKey("ns/app/provider/1.0.0-alpha.1.tar.gz");
     expect(result?.version).toBe("1.0.0-alpha.1");
   });
 });

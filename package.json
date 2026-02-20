@@ -5,6 +5,8 @@
   "description": "Private Terraform/OpenTofu module and provider registry on Cloudflare Workers",
   "scripts": {
     "dev": "next dev --turbopack",
+    "dev:generate-certs": "zsh scripts/generate-certificates.sh",
+    "dev:https": "next dev --turbopack --experimental-https --experimental-https-key .certificates/localhost-key.pem --experimental-https-cert .certificates/localhost.pem",
     "build": "next build",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",

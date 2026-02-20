@@ -213,7 +213,10 @@ export const createApiKeyBody = z
     /** Optional description of the key's purpose. */
     description: z.string().max(1000).optional(),
     /** Optional list of permission strings (e.g., ["read", "write"]). */
-    permissions: z.array(z.string().min(1)).optional(),
+    permissions: z
+      .array(z.string().min(1))
+      .min(1, "At least one permission is required")
+      .optional(),
     /** Optional ISO 8601 expiration datetime (e.g., "2026-01-01T00:00:00.000Z"). */
     expires_at: z
       .string()
@@ -223,3 +226,28 @@ export const createApiKeyBody = z
   .strict({ message: "Unknown fields are not allowed" });
 
 export type CreateApiKeyBody = z.infer<typeof createApiKeyBody>;
+
+/**
+ * JSON body for PATCH /v1/api-keys/:id — update an existing API key.
+ * At least one field must be provided.
+ */
+export const updateApiKeyBody = z
+  .object({
+    /** Updated name (1-255 chars). */
+    name: z
+      .string()
+      .min(1, "'name' must be a non-empty string")
+      .max(255)
+      .optional(),
+    /** Updated permission list. Must contain at least one permission. */
+    permissions: z
+      .array(z.string().min(1))
+      .min(1, "At least one permission is required")
+      .optional(),
+  })
+  .strict({ message: "Unknown fields are not allowed" })
+  .refine((data) => data.name !== undefined || data.permissions !== undefined, {
+    message: "At least one field (name or permissions) must be provided",
+  });
+
+export type UpdateApiKeyBody = z.infer<typeof updateApiKeyBody>;

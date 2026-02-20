@@ -25,6 +25,9 @@ dist/
 # Local storage (development filesystem backend)
 .storage/
 
+# Local HTTPS certificates (development)
+.certificates/
+
 # Testing
 coverage/
 .vitest/

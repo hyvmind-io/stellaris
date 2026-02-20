@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 import { SESSION_COOKIE_NAME, getSessionSecret } from "@/lib/auth/constants";
 
-// Public routes — never redirect, no auth check
-const PUBLIC_PATHS = new Set(["/", "/login", "/signup", "/unauthorized"]);
-const PUBLIC_PREFIXES = [
+const isPrivateRegistry = (process.env.PRIVATE_REGISTRY ?? "true") === "true";
+
+// Auth pages — always public (must be reachable to log in)
+const AUTH_PATHS = new Set(["/login", "/signup", "/unauthorized"]);
+
+// Infrastructure prefixes — always public regardless of private mode
+const INFRA_PREFIXES = [
   "/.well-known",
   "/health",
   "/v1/", // API routes use their own Bearer token auth via requireAuth()
@@ -12,16 +16,16 @@ const PUBLIC_PREFIXES = [
   "/favicon",
 ];
 
-// Protected routes — require session cookie
-const PROTECTED_PREFIXES = ["/modules", "/providers", "/admin", "/profile"];
+// In public mode, these paths are also public (no auth required)
+const PUBLIC_MODE_PATHS = new Set(["/"]);
 
-function isPublic(pathname: string): boolean {
-  if (PUBLIC_PATHS.has(pathname)) return true;
-  return PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+function isAlwaysPublic(pathname: string): boolean {
+  if (AUTH_PATHS.has(pathname)) return true;
+  return INFRA_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }
 
-function isProtected(pathname: string): boolean {
-  return PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+function isPublicModePath(pathname: string): boolean {
+  return PUBLIC_MODE_PATHS.has(pathname);
 }
 
 function isAuthPage(pathname: string): boolean {
@@ -43,9 +47,9 @@ async function verifySession(request: NextRequest): Promise<boolean> {
 export async function middleware(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
 
-  // Always allow public paths and API routes
-  if (isPublic(pathname)) {
-    // If user is on login/signup page and is already authenticated, redirect to home
+  // Infrastructure + auth pages — always allowed
+  if (isAlwaysPublic(pathname)) {
+    // Redirect authenticated users away from login/signup
     if (isAuthPage(pathname)) {
       const isAuthenticated = await verifySession(request);
       if (isAuthenticated) {
@@ -55,14 +59,19 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     return NextResponse.next();
   }
 
-  // Protected routes require authentication
-  if (isProtected(pathname)) {
-    const isAuthenticated = await verifySession(request);
-    if (!isAuthenticated) {
-      const loginUrl = new URL("/login", request.url);
-      loginUrl.searchParams.set("next", pathname);
-      return NextResponse.redirect(loginUrl);
-    }
+  // In public mode, additional paths are public
+  if (!isPrivateRegistry && isPublicModePath(pathname)) {
+    return NextResponse.next();
+  }
+
+  // Everything else requires authentication
+  // In private mode: includes "/", "/modules", "/providers", "/admin", "/profile", etc.
+  // In public mode: includes "/modules", "/providers", "/admin", "/profile", etc.
+  const isAuthenticated = await verifySession(request);
+  if (!isAuthenticated) {
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("next", pathname);
+    return NextResponse.redirect(loginUrl);
   }
 
   return NextResponse.next();

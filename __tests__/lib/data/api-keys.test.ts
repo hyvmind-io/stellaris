@@ -26,11 +26,16 @@ const mockInsert = vi.fn<AnyFn>(() => ({ values: mockInsertValues }));
 const mockDeleteWhere = vi.fn<AnyFn>(() => ({ returning: mockReturning }));
 const mockDelete = vi.fn<AnyFn>(() => ({ where: mockDeleteWhere }));
 
+const mockUpdateSet = vi.fn<AnyFn>();
+const mockUpdateWhere = vi.fn<AnyFn>(() => ({ returning: mockReturning }));
+const mockUpdate = vi.fn<AnyFn>(() => ({ set: mockUpdateSet }));
+
 vi.mock("@/db/client", () => ({
   getDb: vi.fn(() => ({
     select: mockSelect,
     insert: mockInsert,
     delete: mockDelete,
+    update: mockUpdate,
   })),
 }));
 
@@ -70,6 +75,7 @@ import {
   countUserApiKeys,
   createUserApiKey,
   deleteUserApiKey,
+  updateUserApiKey,
 } from "@/lib/data/api-keys";
 
 // ============================================================================
@@ -90,11 +96,12 @@ const dbApiKeyRecord = {
   expiresAt: null,
 };
 
-// Safe client-facing shape (no keyHash, no permissions, no userId)
+// Safe client-facing shape (no keyHash, no userId — permissions IS exposed)
 const apiKeyData = {
   id: 10,
   name: "my-key",
   description: null,
+  permissions: ["admin"],
   createdAt: NOW,
   lastUsedAt: null,
   expiresAt: null,
@@ -161,7 +168,7 @@ describe("getUserApiKeys", () => {
     expect(result).toHaveLength(2);
     result.forEach((k) => {
       expect(k).not.toHaveProperty("keyHash");
-      expect(k).not.toHaveProperty("permissions");
+      expect(k).toHaveProperty("permissions");
       expect(k).not.toHaveProperty("userId");
     });
   });
@@ -266,6 +273,34 @@ describe("createUserApiKey", () => {
     expect(result.plainTextKey).toBe(plainKey);
     expect(result.key).not.toHaveProperty("keyHash");
   });
+
+  it("uses custom permissions when provided", async () => {
+    mockGenerateApiKey.mockReturnValue("stlr_custom");
+    mockHashApiKey.mockResolvedValue("custom_hash");
+    mockInsertReturning.mockResolvedValue([
+      { ...dbApiKeyRecord, permissions: ["modules:read", "providers:read"] },
+    ]);
+
+    await createUserApiKey(1, "read-only", ["modules:read", "providers:read"]);
+
+    expect(mockInsertValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        permissions: ["modules:read", "providers:read"],
+      }),
+    );
+  });
+
+  it("falls back to ['admin'] when empty permissions array is provided", async () => {
+    mockGenerateApiKey.mockReturnValue("stlr_fallback");
+    mockHashApiKey.mockResolvedValue("fallback_hash");
+    mockInsertReturning.mockResolvedValue([dbApiKeyRecord]);
+
+    await createUserApiKey(1, "fallback-key", []);
+
+    expect(mockInsertValues).toHaveBeenCalledWith(
+      expect.objectContaining({ permissions: ["admin"] }),
+    );
+  });
 });
 
 // ============================================================================
@@ -314,5 +349,107 @@ describe("deleteUserApiKey", () => {
 
     // The where clause should have been called (ownership enforced at DB level)
     expect(mockDeleteWhere).toHaveBeenCalled();
+  });
+});
+
+// ============================================================================
+// updateUserApiKey
+// ============================================================================
+
+describe("updateUserApiKey", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUpdate.mockReturnValue({ set: mockUpdateSet });
+    mockUpdateSet.mockReturnValue({ where: mockUpdateWhere });
+  });
+
+  it("updates name and permissions, returns updated ApiKeyData", async () => {
+    const updated = {
+      ...dbApiKeyRecord,
+      name: "renamed",
+      permissions: ["modules:read"],
+    };
+    mockReturning.mockResolvedValue([updated]);
+    mockUpdateWhere.mockReturnValue({ returning: mockReturning });
+    mockUpdateSet.mockReturnValue({ where: mockUpdateWhere });
+
+    const result = await updateUserApiKey(10, 1, {
+      name: "renamed",
+      permissions: ["modules:read"],
+    });
+
+    expect(result).not.toBeNull();
+    expect(result!.name).toBe("renamed");
+    expect(result!.permissions).toEqual(["modules:read"]);
+    expect(result).not.toHaveProperty("keyHash");
+    expect(result).not.toHaveProperty("userId");
+  });
+
+  it("returns null when key not found (wrong keyId)", async () => {
+    mockReturning.mockResolvedValue([]);
+    mockUpdateWhere.mockReturnValue({ returning: mockReturning });
+    mockUpdateSet.mockReturnValue({ where: mockUpdateWhere });
+
+    const result = await updateUserApiKey(999, 1, { name: "test" });
+
+    expect(result).toBeNull();
+  });
+
+  it("returns null when userId does not match (ownership violation)", async () => {
+    mockReturning.mockResolvedValue([]);
+    mockUpdateWhere.mockReturnValue({ returning: mockReturning });
+    mockUpdateSet.mockReturnValue({ where: mockUpdateWhere });
+
+    const result = await updateUserApiKey(10, 999, { name: "test" });
+
+    expect(result).toBeNull();
+  });
+
+  it("returns null when no fields are provided", async () => {
+    const result = await updateUserApiKey(10, 1, {});
+
+    expect(result).toBeNull();
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it("only updates name when only name is provided", async () => {
+    const updated = { ...dbApiKeyRecord, name: "new-name" };
+    mockReturning.mockResolvedValue([updated]);
+    mockUpdateWhere.mockReturnValue({ returning: mockReturning });
+    mockUpdateSet.mockReturnValue({ where: mockUpdateWhere });
+
+    const result = await updateUserApiKey(10, 1, { name: "new-name" });
+
+    expect(result).not.toBeNull();
+    expect(result!.name).toBe("new-name");
+    expect(mockUpdateSet).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "new-name" }),
+    );
+    expect(mockUpdateSet).toHaveBeenCalledWith(
+      expect.not.objectContaining({ permissions: expect.anything() }),
+    );
+  });
+
+  it("only updates permissions when only permissions is provided", async () => {
+    const updated = {
+      ...dbApiKeyRecord,
+      permissions: ["providers:write"],
+    };
+    mockReturning.mockResolvedValue([updated]);
+    mockUpdateWhere.mockReturnValue({ returning: mockReturning });
+    mockUpdateSet.mockReturnValue({ where: mockUpdateWhere });
+
+    const result = await updateUserApiKey(10, 1, {
+      permissions: ["providers:write"],
+    });
+
+    expect(result).not.toBeNull();
+    expect(result!.permissions).toEqual(["providers:write"]);
+    expect(mockUpdateSet).toHaveBeenCalledWith(
+      expect.objectContaining({ permissions: ["providers:write"] }),
+    );
+    expect(mockUpdateSet).toHaveBeenCalledWith(
+      expect.not.objectContaining({ name: expect.anything() }),
+    );
   });
 });

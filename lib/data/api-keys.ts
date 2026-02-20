@@ -26,6 +26,7 @@ function toApiKeyData(record: typeof apiKeys.$inferSelect): ApiKeyData {
     id: record.id,
     name: record.name,
     description: record.description,
+    permissions: record.permissions ?? [],
     createdAt: record.createdAt,
     lastUsedAt: record.lastUsedAt,
     expiresAt: record.expiresAt,
@@ -81,16 +82,18 @@ export async function countUserApiKeys(userId: number): Promise<number> {
  * Returns the plaintext key (only available at creation time) and metadata.
  *
  * The key is stored as a SHA-256 hash — the plaintext is never persisted.
- * Permissions default to `["admin"]` so user-created keys work with the
- * existing API auth system.
+ * Permissions default to `["admin"]` for backward compatibility if none provided.
+ * When permissions are explicitly passed, those are used instead.
  *
  * @param userId - Owner user ID
  * @param name - Human-readable key name
+ * @param permissions - Optional permission list. Defaults to ["admin"] if omitted.
  * @returns The API key metadata and the one-time plaintext key
  */
 export async function createUserApiKey(
   userId: number,
   name: string,
+  permissions?: string[],
 ): Promise<CreateApiKeyResult> {
   const plainKey = generateApiKey();
   const keyHash = await hashApiKey(plainKey);
@@ -102,7 +105,8 @@ export async function createUserApiKey(
       keyHash,
       name,
       userId,
-      permissions: ["admin"],
+      permissions:
+        permissions && permissions.length > 0 ? permissions : ["admin"],
     })
     .returning();
 
@@ -132,4 +136,38 @@ export async function deleteUserApiKey(
     .returning({ id: apiKeys.id });
 
   return result.length > 0;
+}
+
+/**
+ * Update an API key's name and/or permissions, verifying userId ownership.
+ * Returns the updated API key data, or null if not found or not owned by user.
+ *
+ * @param keyId - API key ID to update
+ * @param userId - Owner user ID (ownership check)
+ * @param data - Fields to update (name, permissions)
+ * @returns Updated API key data, or null
+ */
+export async function updateUserApiKey(
+  keyId: number,
+  userId: number,
+  data: { name?: string; permissions?: string[] },
+): Promise<ApiKeyData | null> {
+  const db = getDb();
+
+  // Build update set — only include provided fields
+  const updateSet: Record<string, unknown> = {};
+  if (data.name !== undefined) updateSet.name = data.name;
+  if (data.permissions !== undefined) updateSet.permissions = data.permissions;
+
+  if (Object.keys(updateSet).length === 0) return null;
+
+  const result = await db
+    .update(apiKeys)
+    .set(updateSet)
+    .where(and(eq(apiKeys.id, keyId), eq(apiKeys.userId, userId)))
+    .returning();
+
+  if (result.length === 0) return null;
+
+  return toApiKeyData(result[0]!);
 }

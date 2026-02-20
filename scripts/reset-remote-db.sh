@@ -2,20 +2,16 @@
 #
 # Reset Remote D1 Database
 #
-# ⚠️  DESTRUCTIVE: Drops ALL tables from the REMOTE D1 database
-# and reinitializes from migrations. This is irreversible.
+# ⚠️  DESTRUCTIVE: Drops ALL tables from the REMOTE D1 database.
+# This is irreversible. Run 'pnpm db:setup:remote' after this to
+# reinitialize from migrations.
 #
 # Usage: pnpm db:reset:remote
 #
 
 set -euo pipefail
 
-# ============================================================================
-# Configuration
-# ============================================================================
-
 DB_NAME="stellaris-db"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Tables in reverse dependency order (children before parents)
 TABLES=(
@@ -66,11 +62,5 @@ done
 
 echo ""
 echo "🗑  All tables dropped."
-
-# ============================================================================
-# Reinitialize
-# ============================================================================
-
 echo ""
-echo "Reinitializing remote database..."
-exec zsh "$SCRIPT_DIR/setup-remote-db.sh" --yes
+echo "✅ Remote database wiped. Run 'pnpm db:setup:remote' to reinitialize."
