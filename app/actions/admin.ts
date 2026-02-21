@@ -4,7 +4,20 @@ import { count, eq } from "drizzle-orm";
 import { getAuth } from "@/lib/auth/get-auth";
 import { getDb } from "@/db/client";
 import { apiKeys, sessions } from "@/db/schema";
-import { isSignupEnabled, setSignupEnabled } from "@/lib/data/settings";
+import {
+  isSignupEnabled,
+  setSignupEnabled,
+  setSystemSetting,
+  deleteSystemSetting,
+} from "@/lib/data/settings";
+import {
+  SETTINGS_KEY,
+  resolveModuleRegistries,
+  resolveProviderRegistries,
+  isModuleProxyEnabled,
+  isProviderProxyEnabled,
+  normaliseRegistryUrl,
+} from "@/lib/upstream/config";
 import {
   getAllUsers,
   getUserById,
@@ -14,6 +27,10 @@ import {
   getUserByUsername,
   createUser,
   deleteUser,
+  isEmailTaken,
+  isUsernameTaken,
+  updateUser,
+  updateUserPassword,
 } from "@/lib/data/users";
 import { deleteAllUserSessionsFromDb } from "@/lib/auth/session";
 import type { AuthUser, AuthUserWithCounts, UserRole } from "@/types/auth";
@@ -63,9 +80,40 @@ export interface CreateUserResult {
   error?: string;
 }
 
+export interface EditUserResult {
+  success: boolean;
+  user?: AuthUser;
+  error?: string;
+}
+
 export interface DeleteUserResult {
   success: boolean;
   error?: string;
+}
+
+export interface ResetPasswordResult {
+  success: boolean;
+  error?: string;
+}
+
+export interface ProxySettings {
+  module_proxy_enabled: boolean;
+  provider_proxy_enabled: boolean;
+  module_upstream_registries: string[];
+  provider_upstream_registries: string[];
+}
+
+export interface ProxySettingsResult {
+  success: boolean;
+  settings?: ProxySettings;
+  error?: string;
+}
+
+export interface UpdateProxySettingsInput {
+  module_proxy_enabled?: boolean;
+  provider_proxy_enabled?: boolean;
+  module_upstream_registries?: string[] | null;
+  provider_upstream_registries?: string[] | null;
 }
 
 // ============================================================================
@@ -326,6 +374,83 @@ export async function createUserAction(data: {
 }
 
 /**
+ * Edit a user's profile fields. Requires admin role.
+ * Admins can edit any user, including other admins.
+ * Does NOT change role — use updateUserRoleAction for that.
+ */
+export async function editUserAction(
+  userId: number,
+  data: {
+    email?: string;
+    username?: string;
+    displayName?: string | null;
+  },
+): Promise<EditUserResult> {
+  const check = await requireAdmin();
+  if (!check.ok) {
+    return { success: false, error: check.error };
+  }
+
+  try {
+    // Verify the target user exists
+    const targetUser = await getUserById(userId);
+    if (!targetUser) {
+      return { success: false, error: "User not found" };
+    }
+
+    // Validate email format if provided
+    if (data.email !== undefined) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(data.email)) {
+        return { success: false, error: "Invalid email format" };
+      }
+
+      // Check uniqueness (excluding the target user)
+      const emailTaken = await isEmailTaken(data.email, userId);
+      if (emailTaken) {
+        return { success: false, error: "Email already in use" };
+      }
+    }
+
+    // Validate username format if provided
+    if (data.username !== undefined) {
+      const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/;
+      if (!usernameRegex.test(data.username)) {
+        return {
+          success: false,
+          error:
+            "Username must be 3-20 characters, alphanumeric and underscores only",
+        };
+      }
+
+      // Check uniqueness (excluding the target user)
+      const usernameTaken = await isUsernameTaken(data.username, userId);
+      if (usernameTaken) {
+        return { success: false, error: "Username already in use" };
+      }
+    }
+
+    // Build update payload — only include provided fields
+    const updates: {
+      email?: string;
+      username?: string;
+      displayName?: string | null;
+    } = {};
+
+    if (data.email !== undefined) updates.email = data.email;
+    if (data.username !== undefined) updates.username = data.username;
+    if (data.displayName !== undefined) updates.displayName = data.displayName;
+
+    const updatedUser = await updateUser(userId, updates);
+
+    return { success: true, user: updatedUser };
+  } catch (error) {
+    console.error("[Admin] editUserAction error:", error);
+    return { success: false, error: "Failed to update user" };
+  }
+}
+
+/**
  * Delete a user. Requires admin role.
  * Prevents self-deletion and deleting the last admin.
  */
@@ -370,5 +495,199 @@ export async function deleteUserAction(
   } catch (error) {
     console.error("[Admin] deleteUserAction error:", error);
     return { success: false, error: "Failed to delete user" };
+  }
+}
+
+/**
+ * Reset another user's password. Requires admin role.
+ * Prevents resetting your own password (use the profile change-password flow).
+ * Invalidates all target user sessions to force re-login.
+ */
+export async function resetUserPasswordAction(
+  userId: number,
+  newPassword: string,
+): Promise<ResetPasswordResult> {
+  const check = await requireAdmin();
+  if (!check.ok) {
+    return { success: false, error: check.error };
+  }
+
+  try {
+    // Prevent self-reset — admins should use the profile change-password flow
+    const auth = await getAuth();
+    if (auth && userId === auth.user.id) {
+      return {
+        success: false,
+        error:
+          "Cannot reset your own password here. Use the profile change-password flow instead.",
+      };
+    }
+
+    // Validate password policy (consistent with createUserAction / changePasswordSchema)
+    if (newPassword.length < 8) {
+      return {
+        success: false,
+        error: "Password must be at least 8 characters",
+      };
+    }
+
+    // Verify the target user exists
+    const targetUser = await getUserById(userId);
+    if (!targetUser) {
+      return { success: false, error: "User not found" };
+    }
+
+    // Update password
+    await updateUserPassword(userId, newPassword);
+
+    // Invalidate all sessions for the target user to force re-login
+    await deleteAllUserSessionsFromDb(userId);
+
+    return { success: true };
+  } catch (error) {
+    console.error("[Admin] resetUserPasswordAction error:", error);
+    return { success: false, error: "Failed to reset password" };
+  }
+}
+
+// ============================================================================
+// Proxy Settings Actions
+// ============================================================================
+
+/**
+ * Get the current upstream proxy configuration.
+ * Returns effective (resolved) values — what the proxy actually uses.
+ * Requires admin role.
+ */
+export async function getProxySettingsAction(): Promise<ProxySettingsResult> {
+  const check = await requireAdmin();
+  if (!check.ok) {
+    return { success: false, error: check.error };
+  }
+
+  try {
+    const [
+      moduleEnabled,
+      providerEnabled,
+      moduleRegistries,
+      providerRegistries,
+    ] = await Promise.all([
+      isModuleProxyEnabled(),
+      isProviderProxyEnabled(),
+      resolveModuleRegistries(),
+      resolveProviderRegistries(),
+    ]);
+
+    return {
+      success: true,
+      settings: {
+        module_proxy_enabled: moduleEnabled,
+        provider_proxy_enabled: providerEnabled,
+        module_upstream_registries: moduleRegistries,
+        provider_upstream_registries: providerRegistries,
+      },
+    };
+  } catch (error) {
+    console.error("[Admin] getProxySettingsAction error:", error);
+    return { success: false, error: "Failed to load proxy settings" };
+  }
+}
+
+/**
+ * Update upstream proxy configuration.
+ * Only provided fields are updated; omitted fields are left unchanged.
+ * Set a registry list to `null` to clear the DB override (revert to env/defaults).
+ * Requires admin role.
+ */
+export async function updateProxySettingsAction(
+  data: UpdateProxySettingsInput,
+): Promise<ProxySettingsResult> {
+  const check = await requireAdmin();
+  if (!check.ok) {
+    return { success: false, error: check.error };
+  }
+
+  try {
+    const updates: Promise<void>[] = [];
+
+    if (data.module_proxy_enabled !== undefined) {
+      updates.push(
+        setSystemSetting(
+          SETTINGS_KEY.moduleProxyEnabled,
+          String(data.module_proxy_enabled),
+        ),
+      );
+    }
+
+    if (data.provider_proxy_enabled !== undefined) {
+      updates.push(
+        setSystemSetting(
+          SETTINGS_KEY.providerProxyEnabled,
+          String(data.provider_proxy_enabled),
+        ),
+      );
+    }
+
+    if (data.module_upstream_registries !== undefined) {
+      if (data.module_upstream_registries === null) {
+        updates.push(deleteSystemSetting(SETTINGS_KEY.moduleRegistries));
+      } else {
+        const normalised = data.module_upstream_registries
+          .map(normaliseRegistryUrl)
+          .filter((u): u is string => u !== null);
+        updates.push(
+          setSystemSetting(
+            SETTINGS_KEY.moduleRegistries,
+            JSON.stringify(normalised),
+          ),
+        );
+      }
+    }
+
+    if (data.provider_upstream_registries !== undefined) {
+      if (data.provider_upstream_registries === null) {
+        updates.push(deleteSystemSetting(SETTINGS_KEY.providerRegistries));
+      } else {
+        const normalised = data.provider_upstream_registries
+          .map(normaliseRegistryUrl)
+          .filter((u): u is string => u !== null);
+        updates.push(
+          setSystemSetting(
+            SETTINGS_KEY.providerRegistries,
+            JSON.stringify(normalised),
+          ),
+        );
+      }
+    }
+
+    await Promise.all(updates);
+
+    // Return updated effective configuration
+    const [moduleEnabled, providerEnabled, moduleRegs, providerRegs] =
+      await Promise.all([
+        isModuleProxyEnabled(),
+        isProviderProxyEnabled(),
+        resolveModuleRegistries(),
+        resolveProviderRegistries(),
+      ]);
+
+    return {
+      success: true,
+      settings: {
+        module_proxy_enabled: moduleEnabled,
+        provider_proxy_enabled: providerEnabled,
+        module_upstream_registries: moduleRegs,
+        provider_upstream_registries: providerRegs,
+      },
+    };
+  } catch (error) {
+    console.error("[Admin] updateProxySettingsAction error:", error);
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to update proxy settings",
+    };
   }
 }

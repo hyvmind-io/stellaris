@@ -17,6 +17,8 @@ import {
   modulePublishParams,
   createApiKeyBody,
   providerPublishData,
+  moduleTagsSchema,
+  proxySettingsPatch,
 } from "@/lib/validation/registry";
 
 // ============================================================================
@@ -865,6 +867,119 @@ describe("providerPublishData — filename validation", () => {
   it("rejects a filename over 255 characters", () => {
     expect(
       valid(providerPublishData, withFilename("a".repeat(256) + ".zip")),
+    ).toBe(false);
+  });
+});
+
+// ============================================================================
+// moduleTagsSchema
+// ============================================================================
+
+describe("moduleTagsSchema", () => {
+  it("accepts undefined (optional)", () => {
+    expect(moduleTagsSchema.safeParse(undefined).success).toBe(true);
+  });
+
+  it("accepts a valid array of provider identifiers", () => {
+    const result = moduleTagsSchema.safeParse(["aws", "gcp", "azure"]);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data).toEqual(["aws", "gcp", "azure"]);
+  });
+
+  it("accepts an empty array", () => {
+    expect(moduleTagsSchema.safeParse([]).success).toBe(true);
+  });
+
+  it("accepts a single-element array", () => {
+    expect(moduleTagsSchema.safeParse(["aws"]).success).toBe(true);
+  });
+
+  it("rejects arrays longer than 20 items", () => {
+    const tags = Array.from({ length: 21 }, (_, i) => `tag${i}`);
+    expect(moduleTagsSchema.safeParse(tags).success).toBe(false);
+  });
+
+  it("rejects tags with uppercase letters", () => {
+    expect(moduleTagsSchema.safeParse(["AWS"]).success).toBe(false);
+  });
+
+  it("rejects tags with invalid characters", () => {
+    expect(moduleTagsSchema.safeParse(["my_tag"]).success).toBe(false);
+  });
+
+  it("accepts tags with hyphens", () => {
+    expect(moduleTagsSchema.safeParse(["google-cloud"]).success).toBe(true);
+  });
+});
+
+// ============================================================================
+// proxySettingsPatch
+// ============================================================================
+
+describe("proxySettingsPatch", () => {
+  it("accepts enabling module proxy", () => {
+    expect(
+      proxySettingsPatch.safeParse({ module_proxy_enabled: true }).success,
+    ).toBe(true);
+  });
+
+  it("accepts enabling provider proxy", () => {
+    expect(
+      proxySettingsPatch.safeParse({ provider_proxy_enabled: true }).success,
+    ).toBe(true);
+  });
+
+  it("accepts setting module registries", () => {
+    const result = proxySettingsPatch.safeParse({
+      module_upstream_registries: ["https://registry.opentofu.org"],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts null registries to clear DB override", () => {
+    const result = proxySettingsPatch.safeParse({
+      module_upstream_registries: null,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts empty array to disable upstream", () => {
+    const result = proxySettingsPatch.safeParse({
+      module_upstream_registries: [],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts multiple fields", () => {
+    const result = proxySettingsPatch.safeParse({
+      module_proxy_enabled: true,
+      provider_proxy_enabled: false,
+      module_upstream_registries: ["https://example.com"],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects empty body (no fields provided)", () => {
+    expect(proxySettingsPatch.safeParse({}).success).toBe(false);
+  });
+
+  it("rejects unknown fields", () => {
+    expect(proxySettingsPatch.safeParse({ unknown_field: true }).success).toBe(
+      false,
+    );
+  });
+
+  it("rejects invalid URL in registries", () => {
+    expect(
+      proxySettingsPatch.safeParse({
+        module_upstream_registries: ["not-a-url"],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects non-boolean proxy enabled", () => {
+    expect(
+      proxySettingsPatch.safeParse({ module_proxy_enabled: "yes" }).success,
     ).toBe(false);
   });
 });

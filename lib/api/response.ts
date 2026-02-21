@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { makeEtag } from "./etag";
 
 /**
  * Create a JSON response with standard registry headers.
@@ -8,6 +9,27 @@ export function jsonResponse<T>(data: T, status = 200): NextResponse {
     status,
     headers: {
       "Content-Type": "application/json",
+    },
+  });
+}
+
+/**
+ * Create a JSON response with an ETag header derived from a revision number.
+ *
+ * Used by admin CRUD endpoints that support optimistic concurrency.
+ * The client can cache the ETag and send it back in `If-Match` on updates.
+ */
+export function etagResponse<T>(
+  data: T,
+  revision: number,
+  status = 200,
+): NextResponse {
+  return NextResponse.json(data, {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      ETag: makeEtag(revision),
+      "Cache-Control": "no-store",
     },
   });
 }

@@ -14,6 +14,10 @@ vi.mock("@/lib/auth/middleware", () => ({
   requireAuth: vi.fn(),
 }));
 
+vi.mock("@/lib/data/aliases", () => ({
+  resolveProviderCoordinates: vi.fn(),
+}));
+
 vi.mock("@/lib/storage", () => ({
   getObject: vi.fn(),
 }));
@@ -34,6 +38,7 @@ vi.mock("@/lib/validation/registry", () => ({
 
 import { isStrictMode } from "@/lib/auth/registry-mode";
 import { requireAuth } from "@/lib/auth/middleware";
+import { resolveProviderCoordinates } from "@/lib/data/aliases";
 import { getObject } from "@/lib/storage";
 import { generateProviderKey } from "@/lib/storage/keys";
 import { providerDownloadParams } from "@/lib/validation/registry";
@@ -41,6 +46,7 @@ import { GET } from "@/app/v1/providers/[namespace]/[type]/[version]/download/[o
 
 const mockIsStrictMode = vi.mocked(isStrictMode);
 const mockRequireAuth = vi.mocked(requireAuth);
+const mockResolveProviderCoordinates = vi.mocked(resolveProviderCoordinates);
 const mockGetObject = vi.mocked(getObject);
 const mockGenerateProviderKey = vi.mocked(generateProviderKey);
 const mockProviderDownloadParams = vi.mocked(providerDownloadParams);
@@ -103,6 +109,11 @@ describe("GET /v1/providers/[namespace]/[type]/[version]/download/[os]/[arch]/zi
       success: true,
       data: MOCK_PARAMS,
     } as ReturnType<typeof providerDownloadParams.safeParse>);
+    mockResolveProviderCoordinates.mockResolvedValue({
+      namespace: MOCK_PARAMS.namespace,
+      type: MOCK_PARAMS.type,
+      aliased: false,
+    });
     mockGenerateProviderKey.mockReturnValue(
       `providers/hashicorp/aws/5.0.0/terraform-provider-aws_5.0.0_linux_amd64.zip`,
     );

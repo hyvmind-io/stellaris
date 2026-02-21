@@ -4,6 +4,8 @@ import {
   badRequest,
   validationError,
   conflict,
+  preconditionRequired,
+  preconditionFailed,
   internalError,
 } from "@/lib/api/errors";
 
@@ -154,6 +156,58 @@ describe("conflict", () => {
 
   it("errors array has exactly one entry by default", async () => {
     const body = await parseBody(conflict());
+    expect(body.errors).toHaveLength(1);
+  });
+});
+
+// ============================================================================
+// preconditionRequired
+// ============================================================================
+
+describe("preconditionRequired", () => {
+  it("returns status 428", async () => {
+    const response = preconditionRequired();
+    expect(response.status).toBe(428);
+  });
+
+  it("uses the default message when none is provided", async () => {
+    const body = await parseBody(preconditionRequired());
+    expect(body.errors).toEqual(["Missing If-Match header"]);
+  });
+});
+
+// ============================================================================
+// preconditionFailed
+// ============================================================================
+
+describe("preconditionFailed", () => {
+  it("returns status 412", async () => {
+    const response = preconditionFailed();
+    expect(response.status).toBe(412);
+  });
+
+  it("uses the default message when none is provided", async () => {
+    const body = await parseBody(preconditionFailed());
+    expect(body.errors).toEqual([
+      "If-Match revision does not match current resource revision",
+    ]);
+  });
+
+  it("uses the custom message when provided", async () => {
+    const body = await parseBody(
+      preconditionFailed("Revision mismatch on module"),
+    );
+    expect(body.errors).toEqual(["Revision mismatch on module"]);
+  });
+
+  it("returns a body with an 'errors' array", async () => {
+    const body = await parseBody(preconditionFailed());
+    expect(body).toHaveProperty("errors");
+    expect(Array.isArray(body.errors)).toBe(true);
+  });
+
+  it("errors array has exactly one entry by default", async () => {
+    const body = await parseBody(preconditionFailed());
     expect(body.errors).toHaveLength(1);
   });
 });

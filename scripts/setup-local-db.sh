@@ -2,8 +2,11 @@
 #
 # Setup Local D1 Database
 #
-# Applies all Drizzle migrations to the local Wrangler D1 database.
-# Run 'pnpm db:reset' first to wipe existing state.
+# Applies pending Drizzle migrations to the local Wrangler D1 database using
+# Wrangler's built-in migration tracking (D1_MIGRATIONS ledger table). Safe to
+# re-run: already-applied migrations are skipped automatically.
+#
+# Run 'pnpm db:reset' first to wipe existing state if you need a clean slate.
 #
 # To create an API key after setup, use:
 #   pnpm db:create-key --name "local-admin" --permissions '["admin"]'
@@ -33,18 +36,17 @@ if [[ ${#sql_files[@]} -eq 0 ]]; then
 fi
 
 # ============================================================================
-# Apply Migrations
+# Apply Pending Migrations
 # ============================================================================
 
-echo "Applying migrations to local D1 database ($DB_NAME)..."
+echo "Applying pending migrations to local D1 database ($DB_NAME)..."
+echo "(Already-applied migrations are skipped automatically.)"
+echo ""
 
-for f in "${sql_files[@]}"; do
-    echo "  → $(basename "$f")"
-    npx wrangler d1 execute "$DB_NAME" --local --file="$f"
-done
+npx wrangler d1 migrations apply "$DB_NAME" --local
 
 echo ""
-echo "✅ Migrations applied!"
+echo "✅ Local database is up to date!"
 echo ""
 echo "💡 Create an API key to start using the registry:"
 echo "   pnpm db:create-key --name \"local-admin\" --permissions '[\"admin\"]'"

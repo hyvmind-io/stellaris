@@ -22,12 +22,16 @@ import { UserTable } from "@/components/admin/user-table";
 import { RoleChangeDialog } from "@/components/admin/role-change-dialog";
 import { UserDetailsDialog } from "@/components/admin/user-details-dialog";
 import { DeleteUserDialog } from "@/components/admin/delete-user-dialog";
+import { EditUserDialog } from "@/components/admin/edit-user-dialog";
+import { ResetPasswordDialog } from "@/components/admin/reset-password-dialog";
 import { AddUserDialog } from "@/components/admin/add-user-dialog";
 import {
   listUsersAction,
   updateUserRoleAction,
   getUserDetailsAction,
   deleteUserAction,
+  editUserAction,
+  resetUserPasswordAction,
 } from "@/app/actions/admin";
 import type { AuthUser, AuthUserWithCounts, UserRole } from "@/types/auth";
 
@@ -51,11 +55,15 @@ export function UserManagementContent({
 
   // State — dialogs
   const [roleChangeUser, setRoleChangeUser] = useState<AuthUser | null>(null);
+  const [editTargetUser, setEditTargetUser] = useState<AuthUser | null>(null);
   const [detailsUser, setDetailsUser] = useState<AuthUserWithCounts | null>(
     null,
   );
   const [deleteTargetUser, setDeleteTargetUser] =
     useState<AuthUserWithCounts | null>(null);
+  const [resetPasswordUser, setResetPasswordUser] = useState<AuthUser | null>(
+    null,
+  );
 
   // Search debounce
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -145,6 +153,22 @@ export function UserManagementContent({
     setRoleChangeUser(user);
   }
 
+  function handleEditUser(user: AuthUser) {
+    setEditTargetUser(user);
+  }
+
+  async function handleEditUserConfirm(
+    userId: number,
+    data: { email: string; username: string; displayName?: string },
+  ) {
+    const result = await editUserAction(userId, data);
+    if (!result.success) {
+      throw new Error(result.error ?? "Failed to update user");
+    }
+    // Refresh user list to reflect changes
+    void fetchUsers(page, search, roleFilter);
+  }
+
   async function handleRoleChangeConfirm(userId: number, newRole: UserRole) {
     const result = await updateUserRoleAction(userId, newRole);
     if (!result.success) {
@@ -168,6 +192,22 @@ export function UserManagementContent({
       throw new Error(result.error ?? "Failed to delete user");
     }
     // Refresh user list
+    void fetchUsers(page, search, roleFilter);
+  }
+
+  function handleResetPassword(user: AuthUser) {
+    setResetPasswordUser(user);
+  }
+
+  async function handleResetPasswordConfirm(
+    userId: number,
+    newPassword: string,
+  ) {
+    const result = await resetUserPasswordAction(userId, newPassword);
+    if (!result.success) {
+      throw new Error(result.error ?? "Failed to reset password");
+    }
+    // Refresh user list (lastLoginAt may be stale after session invalidation)
     void fetchUsers(page, search, roleFilter);
   }
 
@@ -244,7 +284,9 @@ export function UserManagementContent({
             currentUserId={currentUserId}
             isLoading={isLoading}
             onViewDetails={handleViewDetails}
+            onEditUser={handleEditUser}
             onChangeRole={handleChangeRole}
+            onResetPassword={handleResetPassword}
             onDeleteUser={handleDeleteRequest}
           />
 
@@ -278,6 +320,15 @@ export function UserManagementContent({
       </Card>
 
       {/* Dialogs */}
+      <EditUserDialog
+        user={editTargetUser}
+        open={editTargetUser !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditTargetUser(null);
+        }}
+        onConfirm={handleEditUserConfirm}
+      />
+
       <UserDetailsDialog
         user={detailsUser}
         open={detailsUser !== null}
@@ -303,6 +354,15 @@ export function UserManagementContent({
           if (!open) setDeleteTargetUser(null);
         }}
         onConfirm={handleDeleteConfirm}
+      />
+
+      <ResetPasswordDialog
+        user={resetPasswordUser}
+        open={resetPasswordUser !== null}
+        onOpenChange={(open) => {
+          if (!open) setResetPasswordUser(null);
+        }}
+        onConfirm={handleResetPasswordConfirm}
       />
     </div>
   );

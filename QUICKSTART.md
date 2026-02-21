@@ -95,12 +95,27 @@ tar -czf my-module.tar.gz \
 
 ### Publish it
 
+Single-system module (system = `aws`):
+
 ```bash
 curl -X POST http://localhost:3000/v1/modules/myorg/hello/aws/1.0.0 \
   -H "Authorization: Bearer <your-api-key>" \
   -F "module=@./my-module.tar.gz" \
-  -F "owner=platform-team"
+  -F "owner=platform-team" \
+  -F 'tags=["aws"]'
 ```
+
+Multi-system module using canonical `multi` system keyword:
+
+```bash
+curl -X POST http://localhost:3000/v1/modules/myorg/hello/multi/1.0.0 \
+  -H "Authorization: Bearer <your-api-key>" \
+  -F "module=@./my-module.tar.gz" \
+  -F "owner=platform-team" \
+  -F 'tags=["aws","gcp"]'
+```
+
+`tags` must be a JSON array string in the multipart form field (for example, `-F 'tags=["aws","gcp"]'`).
 
 > **curl tip:** The `-F "module=@./file.tar.gz"` syntax means "file relative to the current directory". Using `@/file.tar.gz` would look for the file at the filesystem root, which is not what you want.
 
@@ -115,7 +130,8 @@ Response (201):
   "version": "1.0.0",
   "owner": "platform-team",
   "published_at": "2026-02-19T...",
-  "downloads": 0
+  "downloads": 0,
+  "tags": ["aws"]
 }
 ```
 
@@ -175,6 +191,8 @@ module "hello" {
 ## Publishing a Provider
 
 Providers are more complex — they require zip binaries, SHA256 checksums, and GPG signing keys.
+
+Provider uploads do **not** support a `tags` field. Use the `platforms` array inside the `data` JSON to define supported targets.
 
 ### Create test provider artifacts
 

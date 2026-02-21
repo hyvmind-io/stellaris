@@ -1,4 +1,5 @@
 import { requireAdmin } from "@/lib/auth/get-auth";
+import { AdminNav } from "@/components/admin/admin-nav";
 
 export default async function AdminLayout({
   children,
@@ -7,6 +8,9 @@ export default async function AdminLayout({
 }) {
   await requireAdmin(); // redirects to /unauthorized if not admin, /login if not authed
   return (
-    <div className="bg-background min-h-[calc(100vh-3.5rem)]">{children}</div>
+    <div className="bg-background min-h-[calc(100vh-3.5rem)]">
+      <AdminNav />
+      {children}
+    </div>
   );
 }

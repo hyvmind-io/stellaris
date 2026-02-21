@@ -2,8 +2,10 @@ import type { NextRequest } from "next/server";
 import { moduleDownloadParams } from "@/lib/validation/registry";
 import { notFound, validationError, internalError } from "@/lib/api/errors";
 import { moduleDownloadResponse } from "@/lib/api/response";
-import { findModule } from "@/lib/data/modules";
+import { resolveModule } from "@/lib/data/modules";
+import { resolveCanonicalModuleCoordinates } from "@/lib/data/aliases";
 import { requireAuth } from "@/lib/auth/middleware";
+import { proxyModuleJson } from "@/lib/upstream/proxy";
 
 /**
  * GET /v1/modules/:namespace/:name/:system/:version/download
@@ -12,6 +14,8 @@ import { requireAuth } from "@/lib/auth/middleware";
  * Returns 200 OK with:
  *   - X-Terraform-Get header (Terraform CLI compatibility)
  *   - JSON body { location } (OpenTofu CLI compatibility)
+ *
+ * Resolution: local (exact match + multi-system fallback) -> upstream proxy.
  *
  * ref: https://developer.hashicorp.com/terraform/registry/api-docs#download-source-code-for-a-specific-module-version
  * ref: https://opentofu.org/docs/internals/module-registry-protocol/
@@ -41,16 +45,35 @@ export async function GET(
     }
 
     const { namespace, name, system, version } = parsed.data;
-    const module = await findModule(namespace, name, system, version);
+    const canonical = await resolveCanonicalModuleCoordinates(
+      namespace,
+      name,
+      system,
+    );
+    const module = await resolveModule(
+      canonical.namespace,
+      canonical.name,
+      canonical.provider,
+      version,
+    );
 
-    if (!module) {
-      return notFound(
-        `Module ${namespace}/${name}/${system} version ${version} not found`,
-      );
+    if (module) {
+      const location = `/v1/modules/tarball/${module.location}`;
+      return moduleDownloadResponse(location);
     }
 
-    const location = `/v1/modules/tarball/${module.location}`;
-    return moduleDownloadResponse(location);
+    // Upstream fallback — proxy the download response
+    const upstream = await proxyModuleJson<{ location?: string }>(
+      `/v1/modules/${namespace}/${name}/${system}/${version}/download`,
+    );
+    if (upstream && upstream.data.location) {
+      // Return the upstream's download location directly (absolute URL)
+      return moduleDownloadResponse(upstream.data.location);
+    }
+
+    return notFound(
+      `Module ${namespace}/${name}/${system} version ${version} not found`,
+    );
   } catch (error) {
     console.error("Error downloading module:", error);
     return internalError();

@@ -29,6 +29,13 @@ Complete API documentation for the Stellaris private Terraform/OpenTofu registry
   - [Get Provider Version](#get-provider-version)
   - [Publish Provider](#publish-provider)
   - [Delete Provider Version](#delete-provider-version)
+- [Admin API — Registry CRUD](#admin-api--registry-crud)
+  - [Admin Contract Baseline](#admin-contract-baseline)
+  - [Optimistic Concurrency (`If-Match`)](#optimistic-concurrency-if-match)
+  - [Admin Modules Endpoints](#admin-modules-endpoints)
+  - [Admin Providers Endpoints](#admin-providers-endpoints)
+  - [Alias Behavior](#alias-behavior)
+  - [Hard Delete Cleanup Contract](#hard-delete-cleanup-contract)
 - [API Keys](#api-keys)
   - [Create API Key](#create-api-key)
   - [List API Keys](#list-api-keys)
@@ -46,6 +53,8 @@ Authorization: Bearer stlr_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2
 API keys use the format `stlr_` followed by 40 hexadecimal characters. Keys are hashed with SHA-256 before storage — the plaintext key is only returned once at creation time.
 
 Both `Bearer <key>` and raw `<key>` formats are accepted in the `Authorization` header.
+
+Admin endpoints under `/v1/admin/...` also require a valid API key with `admin` permission.
 
 **Bootstrap mode:** When no API keys exist in the database, the `POST /v1/api-keys` endpoint allows unauthenticated access to create the first key.
 
@@ -71,17 +80,18 @@ Multiple error messages may be returned for validation errors:
 
 ### Status Codes
 
-| Code  | Meaning                                         |
-| ----- | ----------------------------------------------- |
-| `200` | Success                                         |
-| `201` | Created (publish, key creation)                 |
-| `204` | No Content (module download redirect, deletion) |
-| `400` | Bad Request (malformed input)                   |
-| `401` | Unauthorized (missing or invalid API key)       |
-| `404` | Not Found                                       |
-| `409` | Conflict (resource already exists)              |
-| `422` | Validation Error (Zod schema failures)          |
-| `500` | Internal Server Error                           |
+| Code  | Meaning                                          |
+| ----- | ------------------------------------------------ |
+| `200` | Success                                          |
+| `201` | Created (publish, key creation)                  |
+| `204` | No Content (module download redirect, deletion)  |
+| `400` | Bad Request (malformed input)                    |
+| `401` | Unauthorized (missing or invalid API key)        |
+| `403` | Forbidden (authenticated, but not authorized)    |
+| `404` | Not Found                                        |
+| `409` | Conflict (duplicate create or revision mismatch) |
+| `422` | Validation Error (Zod schema failures)           |
+| `500` | Internal Server Error                            |
 
 ---
 
@@ -473,7 +483,8 @@ curl "https://stellaris.example.com/v1/modules?namespace=myorg&q=vpc&limit=10"
       "description": "Production VPC module",
       "source": "https://github.com/myorg/terraform-aws-vpc",
       "published_at": "2026-02-18T12:00:00.000Z",
-      "downloads": 42
+      "downloads": 42,
+      "tags": ["aws"]
     }
   ]
 }
@@ -514,7 +525,8 @@ Return metadata for the latest version of a module (most recently published).
   "description": "Production VPC module",
   "source": "https://github.com/myorg/terraform-aws-vpc",
   "published_at": "2026-02-18T12:00:00.000Z",
-  "downloads": 42
+  "downloads": 42,
+  "tags": ["aws"]
 }
 ```
 
@@ -557,7 +569,8 @@ Return metadata for a specific module version.
   "description": "Production VPC module",
   "source": "https://github.com/myorg/terraform-aws-vpc",
   "published_at": "2026-01-15T09:30:00.000Z",
-  "downloads": 128
+  "downloads": 128,
+  "tags": ["aws"]
 }
 ```
 
@@ -589,18 +602,32 @@ Publish a new module version. The module tarball is uploaded to R2 and metadata 
 
 **Request Body:** `multipart/form-data`
 
-| Field    | Type   | Required | Description                                 |
-| -------- | ------ | -------- | ------------------------------------------- |
-| `module` | file   | **Yes**  | Module tarball (`.tar.gz`), max **50 MB**   |
-| `owner`  | string | No       | Owner identifier (defaults to empty string) |
+| Field    | Type   | Required | Description                                                             |
+| -------- | ------ | -------- | ----------------------------------------------------------------------- |
+| `module` | file   | **Yes**  | Module tarball (`.tar.gz`), max **50 MB**                               |
+| `owner`  | string | No       | Owner identifier (defaults to empty string)                             |
+| `tags`   | string | No       | JSON array string of provider/system tags (e.g., `"[\"aws\",\"gcp\"]"`) |
 
-**Example:**
+`tags` must be sent as a multipart text field containing JSON (not as repeated fields). Example value: `-F 'tags=["aws","gcp"]'`.
+
+**Example (single-system):**
 
 ```bash
 curl -X POST https://stellaris.example.com/v1/modules/myorg/vpc/aws/1.0.0 \
   -H "Authorization: Bearer stlr_your_api_key" \
   -F "module=@./module.tar.gz" \
-  -F "owner=platform-team"
+  -F "owner=platform-team" \
+  -F 'tags=["aws"]'
+```
+
+**Example (multi-system with canonical `multi` keyword):**
+
+```bash
+curl -X POST https://stellaris.example.com/v1/modules/myorg/vpc/multi/1.0.0 \
+  -H "Authorization: Bearer stlr_your_api_key" \
+  -F "module=@./module.tar.gz" \
+  -F "owner=platform-team" \
+  -F 'tags=["aws","gcp"]'
 ```
 
 **Response** (`201`):
@@ -614,7 +641,8 @@ curl -X POST https://stellaris.example.com/v1/modules/myorg/vpc/aws/1.0.0 \
   "version": "1.0.0",
   "owner": "platform-team",
   "published_at": "2026-02-18T12:00:00.000Z",
-  "downloads": 0
+  "downloads": 0,
+  "tags": ["aws"]
 }
 ```
 
@@ -760,6 +788,8 @@ POST /v1/providers/:namespace/:type/:version
 
 Publish a new provider version with platform binaries, SHA256 checksums, and GPG signing keys. All artifacts are uploaded to R2 and metadata is stored in D1 within a single transaction.
 
+Provider uploads do **not** support a `tags` field. To express compatibility, define each target in `data.platforms`.
+
 **Authentication:** Required
 
 **Path Parameters:**
@@ -900,6 +930,92 @@ curl -X DELETE https://stellaris.example.com/v1/providers/myorg/custom/1.0.0 \
 - `401` — Missing or invalid API key
 - `404` — Provider version not found
 - `422` — Invalid path parameters
+
+---
+
+## Admin API — Registry CRUD
+
+These endpoints provide admin-only CRUD and alias operations for registry metadata. They are API-first contracts intended for cURL/operator tooling and UI workflows.
+
+### Admin Contract Baseline
+
+- Base path: `/v1/admin/...`
+- Authorization: Bearer API key with `admin` permission
+- Auditability: every successful write is expected to emit an immutable audit record
+- Error profile: `401` unauthenticated, `403` unauthorized, `404` not found, `409` conflict, `422` validation
+
+### Optimistic Concurrency (`If-Match`)
+
+Admin mutable resources expose a `revision` value. Clients must:
+
+1. Read current state (`GET`) and capture `revision`
+2. Send `If-Match: <revision>` on required write operations
+3. On `409`, re-read current state and retry with an updated `revision`
+
+**Required `If-Match` operations:**
+
+- Module `PATCH` and `DELETE`
+- Provider `PATCH`, `DELETE`, and platform `PUT`
+
+`If-Match` is mandatory for those endpoints. Missing or stale revisions are rejected with conflict semantics.
+
+### Admin Modules Endpoints
+
+| Operation           | Method + Path                                                             | Concurrency Requirement |
+| ------------------- | ------------------------------------------------------------------------- | ----------------------- |
+| Create version      | `POST /v1/admin/modules/{namespace}/{name}/{system}/versions`             | Not required            |
+| Get admin version   | `GET /v1/admin/modules/{namespace}/{name}/{system}/versions/{version}`    | Not required            |
+| Update version      | `PATCH /v1/admin/modules/{namespace}/{name}/{system}/versions/{version}`  | `If-Match` required     |
+| Hard delete version | `DELETE /v1/admin/modules/{namespace}/{name}/{system}/versions/{version}` | `If-Match` required     |
+| Create alias        | `POST /v1/admin/modules/aliases`                                          | Not required            |
+
+### Admin Providers Endpoints
+
+| Operation                | Method + Path                                                                         | Concurrency Requirement |
+| ------------------------ | ------------------------------------------------------------------------------------- | ----------------------- |
+| Create version           | `POST /v1/admin/providers/{namespace}/{type}/versions`                                | Not required            |
+| Get admin version        | `GET /v1/admin/providers/{namespace}/{type}/versions/{version}`                       | Not required            |
+| Update version           | `PATCH /v1/admin/providers/{namespace}/{type}/versions/{version}`                     | `If-Match` required     |
+| Hard delete version      | `DELETE /v1/admin/providers/{namespace}/{type}/versions/{version}`                    | `If-Match` required     |
+| Upsert platform artifact | `PUT /v1/admin/providers/{namespace}/{type}/versions/{version}/platforms/{os}/{arch}` | `If-Match` required     |
+| Create alias             | `POST /v1/admin/providers/aliases`                                                    | Not required            |
+
+### Alias Behavior
+
+- Rename behavior is implemented through alias creation endpoints only.
+- Old identifiers resolve to canonical resources through existing read/discovery paths:
+  - Modules: `GET /v1/modules/{namespace}/{name}/{system}/versions`
+  - Providers: `GET /v1/providers/{namespace}/{type}/versions`
+- Alias targets must be canonical identities.
+- Alias chains/loops are invalid and must be rejected.
+
+### Hard Delete Cleanup Contract
+
+- Hard delete removes the canonical metadata for the target version.
+- Associated aliases for that target version are removed as part of the delete contract.
+- Artifact cleanup is part of the same operation contract:
+  - Modules: remove version tarball artifacts
+  - Providers: remove platform zip artifacts plus `SHA256SUMS` and `SHA256SUMS.sig`
+- Delete is fail-closed for cleanup confirmation: metadata deletion only succeeds when cleanup contract succeeds; otherwise the request must fail.
+
+### Concurrency Example (`409` Recovery)
+
+```bash
+# 1) Read current admin version and capture revision
+curl -sS \
+  -H "Authorization: Bearer stlr_admin_key" \
+  https://stellaris.example.com/v1/admin/modules/myorg/vpc/aws/versions/1.2.0
+
+# 2) Patch with If-Match
+curl -X PATCH \
+  -H "Authorization: Bearer stlr_admin_key" \
+  -H "If-Match: 42" \
+  -H "Content-Type: application/json" \
+  -d '{"deprecation":{"deprecated":true,"message":"Use 2.x"}}' \
+  https://stellaris.example.com/v1/admin/modules/myorg/vpc/aws/versions/1.2.0
+
+# 3) If response is 409, re-read and retry using latest revision
+```
 
 ---
 

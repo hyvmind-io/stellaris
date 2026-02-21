@@ -1,6 +1,14 @@
 "use client";
 
-import { Eye, MoreHorizontal, Shield, Trash2, Users } from "lucide-react";
+import {
+  Eye,
+  KeyRound,
+  MoreHorizontal,
+  Pencil,
+  Shield,
+  Trash2,
+  Users,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -26,7 +34,9 @@ interface UserTableProps {
   currentUserId?: number;
   isLoading?: boolean;
   onViewDetails: (user: AuthUser) => void;
+  onEditUser: (user: AuthUser) => void;
   onChangeRole: (user: AuthUser) => void;
+  onResetPassword: (user: AuthUser) => void;
   onDeleteUser: (user: AuthUser) => void;
 }
 
@@ -73,7 +83,9 @@ export function UserTable({
   currentUserId,
   isLoading,
   onViewDetails,
+  onEditUser,
   onChangeRole,
+  onResetPassword,
   onDeleteUser,
 }: UserTableProps) {
   if (isLoading) {
@@ -149,9 +161,25 @@ export function UserTable({
                       <Eye className="size-4" />
                       View Details
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onEditUser(user)}>
+                      <Pencil className="size-4" />
+                      Edit User
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => onChangeRole(user)}>
                       <Shield className="size-4" />
                       Change Role
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => onResetPassword(user)}
+                      disabled={isSelf}
+                    >
+                      <KeyRound className="size-4" />
+                      Reset Password
+                      {isSelf && (
+                        <span className="ml-auto text-xs text-muted-foreground">
+                          (use profile)
+                        </span>
+                      )}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem

@@ -23,10 +23,10 @@ pnpm cf-typegen       # Generate CloudflareEnv types
 
 # Database (Drizzle + D1)
 pnpm db:generate      # Generate migrations from schema
-pnpm db:setup         # Apply migrations locally (via wrangler d1 execute)
-pnpm db:setup:remote  # Apply migrations to remote D1
+pnpm db:setup         # Apply pending migrations locally (idempotent, wrangler-tracked)
+pnpm db:setup:remote  # Apply pending migrations to remote D1 (idempotent, wrangler-tracked)
 pnpm db:reset         # Reset local database (wipes .wrangler/ state)
-pnpm db:reset:remote  # Full reset of remote D1 (DESTRUCTIVE)
+pnpm db:reset:remote  # Full reset of remote D1 (DESTRUCTIVE — drops all tables dynamically)
 pnpm db:studio        # Drizzle Studio
 ```
 

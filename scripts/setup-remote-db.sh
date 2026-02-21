@@ -2,7 +2,10 @@
 #
 # Setup Remote D1 Database
 #
-# Applies all Drizzle migrations to the REMOTE Cloudflare D1 database.
+# Applies pending Drizzle migrations to the REMOTE Cloudflare D1 database using
+# Wrangler's built-in migration tracking (D1_MIGRATIONS ledger table). Safe to
+# re-run: already-applied migrations are skipped automatically.
+#
 # This affects your production/staging database.
 #
 # Usage: pnpm db:setup:remote
@@ -26,21 +29,6 @@ for arg in "$@"; do
 done
 
 # ============================================================================
-# Confirm Remote Operation
-# ============================================================================
-
-if [[ "$SKIP_CONFIRM" == "false" ]]; then
-    echo "⚠️  This will apply migrations to the REMOTE D1 database: $DB_NAME"
-    echo ""
-    printf "Continue? (y/N): "
-    read -r answer
-    if [[ "$answer" != "y" && "$answer" != "Y" ]]; then
-        echo "Aborted."
-        exit 0
-    fi
-fi
-
-# ============================================================================
 # Validate Prerequisites
 # ============================================================================
 
@@ -53,18 +41,33 @@ if [[ ${#sql_files[@]} -eq 0 ]]; then
 fi
 
 # ============================================================================
-# Apply Migrations
+# Confirm Remote Operation
 # ============================================================================
 
-echo "Applying migrations to remote D1 database ($DB_NAME)..."
+if [[ "$SKIP_CONFIRM" == "false" ]]; then
+    echo "⚠️  This will apply pending migrations to the REMOTE D1 database: $DB_NAME"
+    echo "   Already-applied migrations are skipped automatically."
+    echo ""
+    printf "Continue? (y/N): "
+    read -r answer
+    if [[ "$answer" != "y" && "$answer" != "Y" ]]; then
+        echo "Aborted."
+        exit 0
+    fi
+    echo ""
+fi
 
-for f in "${sql_files[@]}"; do
-    echo "  → $(basename "$f")"
-    npx wrangler d1 execute "$DB_NAME" --remote --file="$f"
-done
+# ============================================================================
+# Apply Pending Migrations
+# ============================================================================
+
+echo "Applying pending migrations to remote D1 database ($DB_NAME)..."
+echo ""
+
+npx wrangler d1 migrations apply "$DB_NAME" --remote
 
 echo ""
-echo "✅ Remote migrations applied!"
+echo "✅ Remote database is up to date!"
 echo ""
 echo "💡 To create an API key, use the bootstrap endpoint:"
 echo "   curl -X POST https://your-domain/v1/api-keys \\"

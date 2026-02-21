@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
-import { requireAuth } from "@/lib/auth/middleware";
+import { requireAuth, requireAdminWriteAuth } from "@/lib/auth/middleware";
 
 vi.mock("@/lib/auth/api-keys", () => ({
   validateApiKey: vi.fn(),
@@ -184,5 +184,65 @@ describe("requireAuth", () => {
       const body = (await (result as Response).json()) as { errors: string[] };
       expect(body.errors[0]).toContain("providers:write");
     });
+  });
+});
+
+describe("requireAdminWriteAuth", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns 403 for non-mutable methods", async () => {
+    const request = new NextRequest("http://localhost/v1/admin/modules", {
+      method: "GET",
+      headers: { Authorization: "Bearer stlr_admin" },
+    });
+
+    const result = await requireAdminWriteAuth(request);
+    expect(result).toBeInstanceOf(Response);
+    expect((result as Response).status).toBe(403);
+  });
+
+  it("returns 403 for non-admin namespace paths", async () => {
+    const request = new NextRequest("http://localhost/v1/modules", {
+      method: "PATCH",
+      headers: { Authorization: "Bearer stlr_admin" },
+    });
+
+    const result = await requireAdminWriteAuth(request);
+    expect(result).toBeInstanceOf(Response);
+    expect((result as Response).status).toBe(403);
+  });
+
+  it("requires admin permission for mutable /v1/admin routes", async () => {
+    mockValidateApiKey.mockResolvedValue({
+      ...MOCK_API_KEY,
+      permissions: ["modules:write"],
+    });
+
+    const request = new NextRequest("http://localhost/v1/admin/modules", {
+      method: "PATCH",
+      headers: { Authorization: "Bearer stlr_non_admin" },
+    });
+
+    const result = await requireAdminWriteAuth(request);
+    expect(result).toBeInstanceOf(Response);
+    expect((result as Response).status).toBe(403);
+  });
+
+  it("returns ApiKey for admin permission on mutable /v1/admin routes", async () => {
+    mockValidateApiKey.mockResolvedValue({
+      ...MOCK_API_KEY,
+      permissions: ["admin"],
+    });
+
+    const request = new NextRequest("http://localhost/v1/admin/modules", {
+      method: "PATCH",
+      headers: { Authorization: "Bearer stlr_admin" },
+    });
+
+    const result = await requireAdminWriteAuth(request);
+    expect(result).not.toBeInstanceOf(Response);
+    expect(result).toHaveProperty("name", "test-key");
   });
 });

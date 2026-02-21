@@ -1,6 +1,6 @@
 "use client";
 
-import { Settings, Users } from "lucide-react";
+import { Globe, Settings, Users } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -9,6 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { SignupToggle } from "@/components/admin/signup-toggle";
+import { ProxySettings } from "@/components/admin/proxy-settings";
 
 export function SettingsContent() {
   return (
@@ -34,6 +35,23 @@ export function SettingsContent() {
           </CardHeader>
           <CardContent>
             <SignupToggle />
+          </CardContent>
+        </Card>
+
+        {/* Upstream Proxy */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Globe className="h-5 w-5" />
+              <CardTitle>Upstream Proxy</CardTitle>
+            </div>
+            <CardDescription>
+              Configure upstream registry proxying for modules and providers not
+              found locally
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ProxySettings />
           </CardContent>
         </Card>
 
