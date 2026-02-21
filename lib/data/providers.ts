@@ -3,6 +3,7 @@ import { getDb } from "@/db/client";
 import { providers, providerPlatforms, gpgPublicKeys } from "@/db/schema";
 import type { Provider, ProviderPlatform, GpgPublicKey } from "@/db/schema";
 import { escapeLike } from "@/lib/utils/sql";
+import { RevisionConflictError } from "@/lib/data/concurrency";
 
 /**
  * Find a specific provider by namespace, type, and version.
@@ -23,6 +24,23 @@ export async function findProvider(
         eq(providers.version, version),
       ),
     )
+    .limit(1);
+  return result[0];
+}
+
+/**
+ * Find any provider version by namespace/type.
+ * Useful for checking canonical provider existence (aliases/admin flows).
+ */
+export async function findAnyProvider(
+  namespace: string,
+  type: string,
+): Promise<Provider | undefined> {
+  const db = getDb();
+  const result = await db
+    .select()
+    .from(providers)
+    .where(and(eq(providers.namespace, namespace), eq(providers.type, type)))
     .limit(1);
   return result[0];
 }
@@ -161,6 +179,19 @@ export async function getProviderPlatforms(
 }
 
 /**
+ * Get all GPG public keys for a specific provider version.
+ */
+export async function getProviderGpgKeys(
+  providerId: number,
+): Promise<GpgPublicKey[]> {
+  const db = getDb();
+  return db
+    .select()
+    .from(gpgPublicKeys)
+    .where(eq(gpgPublicKeys.providerId, providerId));
+}
+
+/**
  * Insert a new provider with platforms and GPG keys in a single transaction.
  * Returns the created provider record.
  */
@@ -236,6 +267,111 @@ export async function saveProvider(params: {
 }
 
 /**
+ * Replace (upsert) a provider platform artifact and bump provider revision.
+ *
+ * Concurrency contract: provider row must match expectedRevision.
+ */
+export async function replaceProviderPlatform(
+  namespace: string,
+  type: string,
+  version: string,
+  expectedRevision: number,
+  platform: {
+    os: string;
+    arch: string;
+    filename: string;
+    shasum: string;
+    location?: string;
+    shasumUrl?: string;
+    shasumSignatureUrl?: string;
+  },
+): Promise<{ provider: Provider; platform: ProviderPlatform }> {
+  const db = getDb();
+
+  return db.transaction(async (tx) => {
+    const updatedProviderRows = await tx
+      .update(providers)
+      .set({
+        updatedAt: new Date(),
+        revision: sql`${providers.revision} + 1`,
+      })
+      .where(
+        and(
+          eq(providers.namespace, namespace),
+          eq(providers.type, type),
+          eq(providers.version, version),
+          eq(providers.revision, expectedRevision),
+        ),
+      )
+      .returning();
+
+    if (updatedProviderRows.length === 0) {
+      const current = await tx
+        .select({ revision: providers.revision })
+        .from(providers)
+        .where(
+          and(
+            eq(providers.namespace, namespace),
+            eq(providers.type, type),
+            eq(providers.version, version),
+          ),
+        )
+        .limit(1);
+      throw new RevisionConflictError(
+        expectedRevision,
+        current[0]?.revision ?? null,
+      );
+    }
+
+    const provider = updatedProviderRows[0]!;
+
+    const existingRows = await tx
+      .select()
+      .from(providerPlatforms)
+      .where(
+        and(
+          eq(providerPlatforms.providerId, provider.id),
+          eq(providerPlatforms.os, platform.os),
+          eq(providerPlatforms.arch, platform.arch),
+        ),
+      )
+      .limit(1);
+
+    if (existingRows.length > 0) {
+      const updatedRows = await tx
+        .update(providerPlatforms)
+        .set({
+          filename: platform.filename,
+          shasum: platform.shasum,
+          location: platform.location,
+          shasumUrl: platform.shasumUrl,
+          shasumSignatureUrl: platform.shasumSignatureUrl,
+        })
+        .where(eq(providerPlatforms.id, existingRows[0]!.id))
+        .returning();
+
+      return { provider, platform: updatedRows[0]! };
+    }
+
+    const insertedRows = await tx
+      .insert(providerPlatforms)
+      .values({
+        providerId: provider.id,
+        os: platform.os,
+        arch: platform.arch,
+        filename: platform.filename,
+        shasum: platform.shasum,
+        location: platform.location,
+        shasumUrl: platform.shasumUrl,
+        shasumSignatureUrl: platform.shasumSignatureUrl,
+      })
+      .returning();
+
+    return { provider, platform: insertedRows[0]! };
+  });
+}
+
+/**
  * Delete a provider and all associated platforms + GPG keys.
  * Cascade delete is handled by the FK constraint in the schema.
  * Returns the deleted provider and its platforms (for R2 cleanup), or undefined if not found.
@@ -263,6 +399,46 @@ export async function deleteProvider(
         eq(providers.version, version),
       ),
     );
+
+  return { provider, platforms };
+}
+
+/**
+ * Delete a provider version only if revision matches expectedRevision.
+ * Returns deleted provider + platforms for artifact cleanup.
+ * Throws RevisionConflictError on revision mismatch.
+ */
+export async function conditionalDeleteProvider(
+  namespace: string,
+  type: string,
+  version: string,
+  expectedRevision: number,
+): Promise<{ provider: Provider; platforms: ProviderPlatform[] } | undefined> {
+  const db = getDb();
+
+  const provider = await findProvider(namespace, type, version);
+  if (!provider) return undefined;
+
+  if (provider.revision !== expectedRevision) {
+    throw new RevisionConflictError(expectedRevision, provider.revision);
+  }
+
+  const platforms = await getProviderPlatforms(provider.id);
+
+  const deletedRows = await db
+    .delete(providers)
+    .where(
+      and(
+        eq(providers.id, provider.id),
+        eq(providers.revision, expectedRevision),
+      ),
+    )
+    .returning();
+
+  if (deletedRows.length === 0) {
+    const latest = await findProvider(namespace, type, version);
+    throw new RevisionConflictError(expectedRevision, latest?.revision ?? null);
+  }
 
   return { provider, platforms };
 }

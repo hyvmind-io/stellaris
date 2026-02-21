@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   jsonResponse,
+  etagResponse,
   noContentResponse,
   binaryResponse,
   textResponse,
@@ -58,6 +59,58 @@ describe("jsonResponse", () => {
   it("works with status 500", () => {
     const response = jsonResponse({ errors: ["Server error"] }, 500);
     expect(response.status).toBe(500);
+  });
+});
+
+// ============================================================================
+// etagResponse
+// ============================================================================
+
+describe("etagResponse", () => {
+  it("defaults to status 200", () => {
+    const response = etagResponse({ ok: true }, 1);
+    expect(response.status).toBe(200);
+  });
+
+  it("uses the provided status code", () => {
+    const response = etagResponse({ created: true }, 1, 201);
+    expect(response.status).toBe(201);
+  });
+
+  it("serializes the data to JSON", async () => {
+    const data = { id: 1, name: "vpc", version: "1.0.0" };
+    const body = await etagResponse(data, 5).json();
+    expect(body).toEqual(data);
+  });
+
+  it("sets Content-Type to application/json", () => {
+    const response = etagResponse({}, 1);
+    expect(response.headers.get("Content-Type")).toContain("application/json");
+  });
+
+  it("sets a weak ETag header from the revision", () => {
+    const response = etagResponse({}, 3);
+    expect(response.headers.get("ETag")).toBe('W/"3"');
+  });
+
+  it("sets ETag for revision 0", () => {
+    const response = etagResponse({}, 0);
+    expect(response.headers.get("ETag")).toBe('W/"0"');
+  });
+
+  it("sets ETag for large revisions", () => {
+    const response = etagResponse({}, 999);
+    expect(response.headers.get("ETag")).toBe('W/"999"');
+  });
+
+  it("sets Cache-Control no-store for mutable admin compatibility", () => {
+    const response = etagResponse({}, 2);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+  });
+
+  it("handles null data", async () => {
+    const body = await etagResponse(null, 1).json();
+    expect(body).toBeNull();
   });
 });
 

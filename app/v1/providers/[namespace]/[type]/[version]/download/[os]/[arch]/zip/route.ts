@@ -5,6 +5,7 @@ import { notFound, validationError, internalError } from "@/lib/api/errors";
 import { binaryResponse } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/middleware";
 import { isStrictMode } from "@/lib/auth/registry-mode";
+import { resolveProviderCoordinates } from "@/lib/data/aliases";
 import { getObject } from "@/lib/storage";
 import { generateProviderKey } from "@/lib/storage/keys";
 /**
@@ -51,7 +52,14 @@ export async function GET(
     }
 
     const { namespace, type, version, os, arch } = parsed.data;
-    const key = generateProviderKey(namespace, type, version, os, arch);
+    const canonical = await resolveProviderCoordinates(namespace, type);
+    const key = generateProviderKey(
+      canonical.namespace,
+      canonical.type,
+      version,
+      os,
+      arch,
+    );
 
     const object = await getObject(key);
     if (!object) {

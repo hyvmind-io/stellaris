@@ -14,6 +14,10 @@ vi.mock("@/lib/auth/middleware", () => ({
   requireAuth: vi.fn(),
 }));
 
+vi.mock("@/lib/data/aliases", () => ({
+  resolveProviderCoordinates: vi.fn(),
+}));
+
 vi.mock("@/lib/storage", () => ({
   getObject: vi.fn(),
 }));
@@ -30,12 +34,14 @@ vi.mock("@/lib/validation/registry", () => ({
 
 import { isStrictMode } from "@/lib/auth/registry-mode";
 import { requireAuth } from "@/lib/auth/middleware";
+import { resolveProviderCoordinates } from "@/lib/data/aliases";
 import { getObject } from "@/lib/storage";
 import { providerArtifactParams } from "@/lib/validation/registry";
 import { GET } from "@/app/v1/providers/[namespace]/[type]/[version]/sha256sums.sig/route";
 
 const mockIsStrictMode = vi.mocked(isStrictMode);
 const mockRequireAuth = vi.mocked(requireAuth);
+const mockResolveProviderCoordinates = vi.mocked(resolveProviderCoordinates);
 const mockGetObject = vi.mocked(getObject);
 const mockProviderArtifactParams = vi.mocked(providerArtifactParams);
 
@@ -92,6 +98,11 @@ describe("GET /v1/providers/[namespace]/[type]/[version]/sha256sums.sig", () => 
       success: true,
       data: MOCK_PARAMS,
     } as ReturnType<typeof providerArtifactParams.safeParse>);
+    mockResolveProviderCoordinates.mockResolvedValue({
+      namespace: MOCK_PARAMS.namespace,
+      type: MOCK_PARAMS.type,
+      aliased: false,
+    });
     mockGetObject.mockResolvedValue(
       MOCK_SIG_OBJECT as unknown as Awaited<ReturnType<typeof getObject>>,
     );

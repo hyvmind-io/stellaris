@@ -93,11 +93,11 @@ CLOUDFLARE_D1_TOKEN=your_d1_token
 ### 4. Initialize the local database
 
 ```bash
-# Apply migrations to local D1 database
-bash scripts/setup-local-db.sh
+# Apply pending migrations to local D1 database
+pnpm db:setup
 ```
 
-This creates all tables in the local D1 database. After setup, create an API key:
+This uses `wrangler d1 migrations apply --local` to apply only pending migrations (tracked in a `D1_MIGRATIONS` ledger table). It is safe to re-run — already-applied migrations are skipped automatically. After setup, create an API key:
 
 ```bash
 pnpm db:create-key --name "local-admin" --permissions '["admin"]'
@@ -247,12 +247,27 @@ tar -czf my-module.tar.gz \
 
 **Step 2:** Upload the tarball to the registry:
 
+Single-system module (system = `aws`):
+
 ```bash
 curl -X POST https://stellaris.example.com/v1/modules/myorg/vpc/aws/1.0.0 \
   -H "Authorization: Bearer stlr_your_api_key" \
   -F "module=@./my-module.tar.gz" \
-  -F "owner=platform-team"
+  -F "owner=platform-team" \
+  -F 'tags=["aws"]'
 ```
+
+Multi-system module using canonical `multi` system keyword:
+
+```bash
+curl -X POST https://stellaris.example.com/v1/modules/myorg/vpc/multi/1.0.0 \
+  -H "Authorization: Bearer stlr_your_api_key" \
+  -F "module=@./my-module.tar.gz" \
+  -F "owner=platform-team" \
+  -F 'tags=["aws","gcp"]'
+```
+
+`tags` must be sent as a JSON array string in a multipart text field (for example, `-F 'tags=["aws","gcp"]'`).
 
 **Response** (`201 Created`):
 
@@ -265,7 +280,8 @@ curl -X POST https://stellaris.example.com/v1/modules/myorg/vpc/aws/1.0.0 \
   "version": "1.0.0",
   "owner": "platform-team",
   "published_at": "2026-02-18T12:00:00.000Z",
-  "downloads": 0
+  "downloads": 0,
+  "tags": ["aws"]
 }
 ```
 
@@ -276,6 +292,8 @@ curl -X POST https://stellaris.example.com/v1/modules/myorg/vpc/aws/1.0.0 \
 ### Publish a Provider
 
 Provider publishing requires a multipart form with the JSON metadata, platform binaries, and SHA256 signing artifacts:
+
+> Provider uploads do **not** support a `tags` field. Use `data.platforms` to declare supported OS/architecture targets.
 
 ```bash
 curl -X POST https://stellaris.example.com/v1/providers/myorg/custom/1.0.0 \
@@ -341,23 +359,23 @@ curl -X POST https://stellaris.example.com/v1/api-keys \
 
 ### Commands
 
-| Command                | Description                                        |
-| ---------------------- | -------------------------------------------------- |
-| `pnpm dev`             | Start dev server with Turbopack                    |
-| `pnpm build`           | Build for production                               |
-| `pnpm preview`         | Build and preview with Cloudflare Workers locally  |
-| `pnpm deploy`          | Build and deploy to Cloudflare Workers             |
-| `pnpm test`            | Run tests with Vitest                              |
-| `pnpm test:ui`         | Run tests with Vitest UI                           |
-| `pnpm test:coverage`   | Run tests with coverage report                     |
-| `pnpm lint`            | Lint with ESLint                                   |
-| `pnpm type-check`      | TypeScript type checking                           |
-| `pnpm db:generate`     | Generate Drizzle migrations from schema            |
-| `pnpm db:setup`        | Apply migrations locally (via wrangler d1 execute) |
-| `pnpm db:setup:remote` | Apply migrations to remote D1                      |
-| `pnpm db:reset`        | Reset local database (wipes .wrangler/ state)      |
-| `pnpm db:reset:remote` | Full reset of remote D1 (DESTRUCTIVE)              |
-| `pnpm db:studio`       | Open Drizzle Studio (database GUI)                 |
+| Command                | Description                                                     |
+| ---------------------- | --------------------------------------------------------------- |
+| `pnpm dev`             | Start dev server with Turbopack                                 |
+| `pnpm build`           | Build for production                                            |
+| `pnpm preview`         | Build and preview with Cloudflare Workers locally               |
+| `pnpm deploy`          | Build and deploy to Cloudflare Workers                          |
+| `pnpm test`            | Run tests with Vitest                                           |
+| `pnpm test:ui`         | Run tests with Vitest UI                                        |
+| `pnpm test:coverage`   | Run tests with coverage report                                  |
+| `pnpm lint`            | Lint with ESLint                                                |
+| `pnpm type-check`      | TypeScript type checking                                        |
+| `pnpm db:generate`     | Generate Drizzle migrations from schema                         |
+| `pnpm db:setup`        | Apply pending migrations locally (idempotent, wrangler-tracked) |
+| `pnpm db:setup:remote` | Apply migrations to remote D1                                   |
+| `pnpm db:reset`        | Reset local database (wipes .wrangler/ state)                   |
+| `pnpm db:reset:remote` | Full reset of remote D1 (DESTRUCTIVE)                           |
+| `pnpm db:studio`       | Open Drizzle Studio (database GUI)                              |
 
 ### Project Structure
 

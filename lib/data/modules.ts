@@ -1,8 +1,70 @@
-import { eq, and, desc, sql, count, SQL } from "drizzle-orm";
+import { eq, and, desc, sql, count, inArray, SQL } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { modules } from "@/db/schema";
 import type { Module } from "@/db/schema";
 import { escapeLike } from "@/lib/utils/sql";
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+/**
+ * The canonical provider keyword for multi-system modules.
+ * Modules published with this provider value can serve requests for any
+ * system listed in their `tags` array.
+ */
+export const NEUTRAL_PROVIDER_KEYWORD = "multi";
+
+/**
+ * Provider keywords that are checked during multi-system fallback.
+ * Includes the canonical keyword ("multi") plus legacy values ("system",
+ * "neutral") for backwards compatibility with modules published before
+ * the keyword was standardised.
+ */
+const NEUTRAL_PROVIDER_KEYWORDS = [
+  NEUTRAL_PROVIDER_KEYWORD,
+  "system",
+  "neutral",
+];
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/**
+ * Safely parse a raw `tags` column value into a string array.
+ *
+ * The tags column is stored as JSON text but read as a plain string to avoid
+ * ORM-level `JSON.parse` crashes on legacy rows with malformed values (e.g.
+ * bare text like `aws` instead of `["aws"]`).
+ *
+ * Returns `null` when the value is null/undefined, empty, or not a valid
+ * JSON array of strings — callers should fall back to `[provider]`.
+ */
+export function parseTags(raw: string | null | undefined): string[] | null {
+  if (raw == null || raw === "") return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.every((t) => typeof t === "string")) {
+      return parsed;
+    }
+    // Valid JSON but not a string array — treat as single tag if it's a string
+    if (typeof parsed === "string") return [parsed];
+    return null;
+  } catch {
+    // Invalid JSON (plain text like "aws") — wrap as single-element array
+    return [raw];
+  }
+}
+
+/**
+ * Resolve the tags for a module row.
+ * Returns the persisted tags array, falling back to `[provider]` when the
+ * column is null or contains unparseable data.
+ */
+export function resolveModuleTags(mod: Module): string[] {
+  return parseTags(mod.tags) ?? [mod.provider];
+}
 
 /**
  * Find a specific module by namespace, name, provider, and version.
@@ -30,6 +92,74 @@ export async function findModule(
 }
 
 /**
+ * Check whether at least one version exists for a module tuple.
+ */
+export async function hasModule(
+  namespace: string,
+  name: string,
+  provider: string,
+): Promise<boolean> {
+  const db = getDb();
+  const result = await db
+    .select({ id: modules.id })
+    .from(modules)
+    .where(
+      and(
+        eq(modules.namespace, namespace),
+        eq(modules.name, name),
+        eq(modules.provider, provider),
+      ),
+    )
+    .limit(1);
+
+  return result.length > 0;
+}
+
+/**
+ * Resolve a module with multi-system fallback.
+ *
+ * Resolution order:
+ *   1. Exact match on (namespace, name, system, version)
+ *   2. Multi-system module (provider="multi") whose JSON tags array includes `system`
+ *
+ * This allows modules published under provider="multi" with tags=["aws","gcp"]
+ * to be discovered when requesting system="aws".
+ */
+export async function resolveModule(
+  namespace: string,
+  name: string,
+  system: string,
+  version: string,
+): Promise<Module | undefined> {
+  // 1. Exact match
+  const exact = await findModule(namespace, name, system, version);
+  if (exact) return exact;
+
+  // 2. Multi-system fallback — find provider in NEUTRAL_PROVIDER_KEYWORDS with system in tags JSON
+  const db = getDb();
+  const systemResults = await db
+    .select()
+    .from(modules)
+    .where(
+      and(
+        eq(modules.namespace, namespace),
+        eq(modules.name, name),
+        inArray(modules.provider, NEUTRAL_PROVIDER_KEYWORDS),
+        eq(modules.version, version),
+      ),
+    )
+    .limit(10); // small limit — filter in JS for tag match
+
+  for (const mod of systemResults) {
+    if (parseTags(mod.tags)?.includes(system)) {
+      return mod;
+    }
+  }
+
+  return undefined;
+}
+
+/**
  * Get all versions for a specific module (namespace/name/provider).
  * Returns array of version strings sorted descending (newest first).
  */
@@ -54,6 +184,44 @@ export async function getModuleVersions(
 }
 
 /**
+ * Resolve module versions with multi-system fallback.
+ *
+ * Resolution order:
+ *   1. Exact provider match versions
+ *   2. If empty, multi-system modules whose tags include the requested system
+ *
+ * Returns deduplicated version strings, exact matches taking priority.
+ */
+export async function resolveModuleVersions(
+  namespace: string,
+  name: string,
+  system: string,
+): Promise<{ version: string }[]> {
+  // 1. Exact match
+  const exact = await getModuleVersions(namespace, name, system);
+  if (exact.length > 0) return exact;
+
+  // 2. Multi-system fallback
+  const db = getDb();
+  const multiRows = await db
+    .select()
+    .from(modules)
+    .where(
+      and(
+        eq(modules.namespace, namespace),
+        eq(modules.name, name),
+        inArray(modules.provider, NEUTRAL_PROVIDER_KEYWORDS),
+      ),
+    )
+    .orderBy(desc(modules.publishedAt));
+
+  // Filter by tag match in JS (SQLite JSON functions are limited)
+  return multiRows
+    .filter((m) => parseTags(m.tags)?.includes(system))
+    .map((m) => ({ version: m.version }));
+}
+
+/**
  * Get the latest version of a module.
  */
 export async function getModuleLatestVersion(
@@ -75,6 +243,42 @@ export async function getModuleLatestVersion(
     .orderBy(desc(modules.publishedAt))
     .limit(1);
   return result[0];
+}
+
+/**
+ * Resolve the latest version of a module with multi-system fallback.
+ */
+export async function resolveModuleLatestVersion(
+  namespace: string,
+  name: string,
+  system: string,
+): Promise<Module | undefined> {
+  // 1. Exact match
+  const exact = await getModuleLatestVersion(namespace, name, system);
+  if (exact) return exact;
+
+  // 2. Multi-system fallback
+  const db = getDb();
+  const multiRows = await db
+    .select()
+    .from(modules)
+    .where(
+      and(
+        eq(modules.namespace, namespace),
+        eq(modules.name, name),
+        inArray(modules.provider, NEUTRAL_PROVIDER_KEYWORDS),
+      ),
+    )
+    .orderBy(desc(modules.publishedAt));
+
+  // Return first multi-system module whose tags include the requested system
+  for (const mod of multiRows) {
+    if (parseTags(mod.tags)?.includes(system)) {
+      return mod;
+    }
+  }
+
+  return undefined;
 }
 
 /**
@@ -103,6 +307,9 @@ export async function incrementModuleDownloads(
 /**
  * Insert a new module record.
  * The caller must check for duplicates before calling this.
+ *
+ * `tags` defaults to `[provider]` when not supplied, maintaining backward
+ * compatibility with callers that don't know about the tags column.
  */
 export async function saveModule(data: {
   namespace: string;
@@ -113,6 +320,7 @@ export async function saveModule(data: {
   description?: string;
   source?: string;
   location: string;
+  tags?: string[];
 }): Promise<Module> {
   const db = getDb();
   const [module] = await db
@@ -126,6 +334,7 @@ export async function saveModule(data: {
       description: data.description,
       source: data.source,
       location: data.location,
+      tags: JSON.stringify(data.tags ?? [data.provider]),
     })
     .returning();
   // Insert always returns exactly one row on success; failure throws

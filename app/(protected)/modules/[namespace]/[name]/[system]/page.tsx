@@ -5,6 +5,7 @@ import {
   ArrowDownToLine,
   Calendar,
   ExternalLink,
+  Tag,
   User,
   ChevronRight,
 } from "lucide-react";
@@ -12,7 +13,11 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CodeBlock } from "@/components/code-block";
-import { getModuleLatestVersion, getModuleVersions } from "@/lib/data/modules";
+import {
+  getModuleLatestVersion,
+  getModuleVersions,
+  resolveModuleTags,
+} from "@/lib/data/modules";
 
 interface PageProps {
   params: Promise<{ namespace: string; name: string; system: string }>;
@@ -21,10 +26,10 @@ interface PageProps {
 export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
-  const { namespace, name, system } = await params;
+  const { namespace, name } = await params;
   return {
-    title: `${namespace}/${name}/${system} — Stellaris`,
-    description: `Terraform module ${namespace}/${name} for ${system}`,
+    title: `${namespace}/${name} — Stellaris`,
+    description: `Terraform module ${namespace}/${name}`,
   };
 }
 
@@ -47,6 +52,8 @@ export default async function ModuleDetailPage({ params }: PageProps) {
     notFound();
   }
 
+  const tags = resolveModuleTags(latestModule);
+
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Breadcrumb */}
@@ -60,7 +67,7 @@ export default async function ModuleDetailPage({ params }: PageProps) {
         </Link>
         <ChevronRight className="h-4 w-4" />
         <span className="text-foreground">
-          {namespace}/{name}/{system}
+          {namespace}/{name}
         </span>
       </nav>
 
@@ -72,7 +79,6 @@ export default async function ModuleDetailPage({ params }: PageProps) {
             <h1 className="text-3xl font-bold mb-2">
               <span className="text-muted-foreground">{namespace} / </span>
               {name}
-              <span className="text-muted-foreground"> / {system}</span>
             </h1>
             {latestModule.description && (
               <p className="text-lg text-muted-foreground mb-4">
@@ -81,7 +87,12 @@ export default async function ModuleDetailPage({ params }: PageProps) {
             )}
             <div className="flex items-center gap-3 flex-wrap">
               <Badge>v{latestModule.version}</Badge>
-              <Badge variant="secondary">{system}</Badge>
+              {tags.map((tag) => (
+                <Badge key={tag} variant="secondary" className="gap-1">
+                  <Tag className="h-3 w-3" />
+                  {tag}
+                </Badge>
+              ))}
               {latestModule.owner && (
                 <Badge variant="outline" className="gap-1">
                   <User className="h-3 w-3" />

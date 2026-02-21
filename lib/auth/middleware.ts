@@ -1,7 +1,10 @@
 import type { NextRequest } from "next/server";
 import { validateApiKey } from "./api-keys";
 import { unauthorized, forbidden } from "@/lib/api/errors";
+import { PERMISSIONS } from "@/lib/permissions";
 import type { ApiKey } from "@/db/schema";
+
+const MUTABLE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 /**
  * Validate the API key from the Authorization header.
@@ -60,4 +63,21 @@ export async function requireAuth(
   }
 
   return apiKey;
+}
+
+/**
+ * Require admin permission for `/v1/admin` write contracts.
+ */
+export async function requireAdminWriteAuth(
+  request: NextRequest,
+): Promise<ApiKey | Response> {
+  if (!MUTABLE_METHODS.has(request.method)) {
+    return forbidden("Admin write contract requires a mutable HTTP method");
+  }
+
+  if (!request.nextUrl.pathname.startsWith("/v1/admin/")) {
+    return forbidden("Admin write contract is only valid for /v1/admin routes");
+  }
+
+  return requireAuth(request, PERMISSIONS.ADMIN);
 }

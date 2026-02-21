@@ -251,3 +251,59 @@ export const updateApiKeyBody = z
   });
 
 export type UpdateApiKeyBody = z.infer<typeof updateApiKeyBody>;
+
+// ============================================================================
+// Module Tags Schema
+// ============================================================================
+
+/**
+ * Optional tags array for module publish.
+ * Each tag is a provider/system identifier (same format as providerSchema).
+ * Used with multi-system modules (provider="multi") to indicate compatible systems.
+ */
+export const moduleTagsSchema = z
+  .array(providerSchema)
+  .max(20, "Maximum 20 tags allowed")
+  .optional();
+
+// ============================================================================
+// Admin Settings — Upstream Proxy Configuration
+// ============================================================================
+
+/**
+ * PATCH /v1/admin/settings/proxy — update upstream proxy settings.
+ * All fields are optional; only provided fields are updated.
+ */
+export const proxySettingsPatch = z
+  .object({
+    /** Enable/disable upstream fallback for modules. */
+    module_proxy_enabled: z.boolean().optional(),
+    /** Enable/disable upstream fallback for providers. */
+    provider_proxy_enabled: z.boolean().optional(),
+    /**
+     * Ordered list of upstream registry base URLs for modules.
+     * Set to empty array `[]` to explicitly disable upstream.
+     * Set to `null` to clear the DB override (fall back to env/defaults).
+     */
+    module_upstream_registries: z.array(z.string().url()).nullable().optional(),
+    /**
+     * Ordered list of upstream registry base URLs for providers.
+     * Set to empty array `[]` to explicitly disable upstream.
+     * Set to `null` to clear the DB override (fall back to env/defaults).
+     */
+    provider_upstream_registries: z
+      .array(z.string().url())
+      .nullable()
+      .optional(),
+  })
+  .strict({ message: "Unknown fields are not allowed" })
+  .refine(
+    (data) =>
+      data.module_proxy_enabled !== undefined ||
+      data.provider_proxy_enabled !== undefined ||
+      data.module_upstream_registries !== undefined ||
+      data.provider_upstream_registries !== undefined,
+    { message: "At least one field must be provided" },
+  );
+
+export type ProxySettingsPatch = z.infer<typeof proxySettingsPatch>;

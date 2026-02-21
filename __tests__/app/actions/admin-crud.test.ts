@@ -23,6 +23,10 @@ const mockGetUserByEmail = vi.fn<AnyFn>();
 const mockGetUserByUsername = vi.fn<AnyFn>();
 const mockCreateUser = vi.fn<AnyFn>();
 const mockDeleteUser = vi.fn<AnyFn>();
+const mockIsEmailTaken = vi.fn<AnyFn>();
+const mockIsUsernameTaken = vi.fn<AnyFn>();
+const mockUpdateUser = vi.fn<AnyFn>();
+const mockUpdateUserPassword = vi.fn<AnyFn>();
 
 vi.mock("@/lib/data/users", () => ({
   getAllUsers: (...args: unknown[]) => mockGetAllUsers(...args),
@@ -33,6 +37,10 @@ vi.mock("@/lib/data/users", () => ({
   getUserByUsername: (...args: unknown[]) => mockGetUserByUsername(...args),
   createUser: (...args: unknown[]) => mockCreateUser(...args),
   deleteUser: (...args: unknown[]) => mockDeleteUser(...args),
+  isEmailTaken: (...args: unknown[]) => mockIsEmailTaken(...args),
+  isUsernameTaken: (...args: unknown[]) => mockIsUsernameTaken(...args),
+  updateUser: (...args: unknown[]) => mockUpdateUser(...args),
+  updateUserPassword: (...args: unknown[]) => mockUpdateUserPassword(...args),
 }));
 
 // --- Session ---
@@ -74,7 +82,9 @@ import {
   updateUserRoleAction,
   getUserDetailsAction,
   createUserAction,
+  editUserAction,
   deleteUserAction,
+  resetUserPasswordAction,
 } from "@/app/actions/admin";
 
 // ============================================================================
@@ -614,5 +624,295 @@ describe("deleteUserAction", () => {
     const result = await deleteUserAction(3);
 
     expect(result).toEqual({ success: true });
+  });
+});
+
+// ============================================================================
+// editUserAction
+// ============================================================================
+
+describe("editUserAction", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const validEdit = {
+    email: "updated@example.com",
+    username: "updateduser",
+    displayName: "Updated Name",
+  };
+
+  it("returns error when not authenticated", async () => {
+    mockGetAuth.mockResolvedValue(null);
+
+    const result = await editUserAction(2, validEdit);
+
+    expect(result).toEqual({ success: false, error: "Not authenticated" });
+    expect(mockUpdateUser).not.toHaveBeenCalled();
+  });
+
+  it("returns error when not admin", async () => {
+    mockGetAuth.mockResolvedValue(userAuthResult);
+
+    const result = await editUserAction(2, validEdit);
+
+    expect(result).toEqual({ success: false, error: "Admin access required" });
+    expect(mockUpdateUser).not.toHaveBeenCalled();
+  });
+
+  it("returns error when target user not found", async () => {
+    mockGetAuth.mockResolvedValue(adminAuthResult);
+    mockGetUserById.mockResolvedValue(null);
+
+    const result = await editUserAction(999, validEdit);
+
+    expect(result).toEqual({ success: false, error: "User not found" });
+    expect(mockUpdateUser).not.toHaveBeenCalled();
+  });
+
+  it("returns error when email conflicts with another user", async () => {
+    mockGetAuth.mockResolvedValue(adminAuthResult);
+    mockGetUserById.mockResolvedValue(regularUser);
+    mockIsEmailTaken.mockResolvedValue(true); // email is taken by someone else
+
+    const result = await editUserAction(2, { email: "taken@example.com" });
+
+    expect(result).toEqual({ success: false, error: "Email already in use" });
+    expect(mockIsEmailTaken).toHaveBeenCalledWith("taken@example.com", 2);
+    expect(mockUpdateUser).not.toHaveBeenCalled();
+  });
+
+  it("returns error when username conflicts with another user", async () => {
+    mockGetAuth.mockResolvedValue(adminAuthResult);
+    mockGetUserById.mockResolvedValue(regularUser);
+    mockIsEmailTaken.mockResolvedValue(false); // email is fine
+    mockIsUsernameTaken.mockResolvedValue(true); // username is taken
+
+    const result = await editUserAction(2, {
+      email: "new@example.com",
+      username: "takenuser",
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: "Username already in use",
+    });
+    expect(mockIsUsernameTaken).toHaveBeenCalledWith("takenuser", 2);
+    expect(mockUpdateUser).not.toHaveBeenCalled();
+  });
+
+  it("successfully edits a regular user", async () => {
+    mockGetAuth.mockResolvedValue(adminAuthResult);
+    mockGetUserById.mockResolvedValue(regularUser);
+    mockIsEmailTaken.mockResolvedValue(false);
+    mockIsUsernameTaken.mockResolvedValue(false);
+    const updatedUser = {
+      ...regularUser,
+      email: validEdit.email,
+      username: validEdit.username,
+      displayName: validEdit.displayName,
+    };
+    mockUpdateUser.mockResolvedValue(updatedUser);
+
+    const result = await editUserAction(2, validEdit);
+
+    expect(result.success).toBe(true);
+    expect(result.user).toEqual(updatedUser);
+    expect(mockUpdateUser).toHaveBeenCalledWith(2, {
+      email: validEdit.email,
+      username: validEdit.username,
+      displayName: validEdit.displayName,
+    });
+  });
+
+  it("successfully edits an admin user", async () => {
+    mockGetAuth.mockResolvedValue(adminAuthResult);
+    const otherAdmin = { ...adminUser, id: 3, email: "admin2@example.com" };
+    mockGetUserById.mockResolvedValue(otherAdmin);
+    mockIsEmailTaken.mockResolvedValue(false);
+    mockIsUsernameTaken.mockResolvedValue(false);
+    const updatedAdmin = { ...otherAdmin, displayName: "New Admin Name" };
+    mockUpdateUser.mockResolvedValue(updatedAdmin);
+
+    const result = await editUserAction(3, { displayName: "New Admin Name" });
+
+    expect(result.success).toBe(true);
+    expect(result.user).toEqual(updatedAdmin);
+    expect(mockUpdateUser).toHaveBeenCalledWith(3, {
+      displayName: "New Admin Name",
+    });
+  });
+
+  it("allows setting displayName to null", async () => {
+    mockGetAuth.mockResolvedValue(adminAuthResult);
+    mockGetUserById.mockResolvedValue(regularUser);
+    const updatedUser = { ...regularUser, displayName: null };
+    mockUpdateUser.mockResolvedValue(updatedUser);
+
+    const result = await editUserAction(2, { displayName: null });
+
+    expect(result.success).toBe(true);
+    expect(result.user?.displayName).toBeNull();
+    expect(mockUpdateUser).toHaveBeenCalledWith(2, { displayName: null });
+  });
+
+  it("returns error for invalid email format", async () => {
+    mockGetAuth.mockResolvedValue(adminAuthResult);
+    mockGetUserById.mockResolvedValue(regularUser);
+
+    const result = await editUserAction(2, { email: "notanemail" });
+
+    expect(result).toEqual({ success: false, error: "Invalid email format" });
+    expect(mockUpdateUser).not.toHaveBeenCalled();
+  });
+
+  it("returns error for invalid username format", async () => {
+    mockGetAuth.mockResolvedValue(adminAuthResult);
+    mockGetUserById.mockResolvedValue(regularUser);
+
+    const result = await editUserAction(2, { username: "ab" });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/Username must be/);
+    expect(mockUpdateUser).not.toHaveBeenCalled();
+  });
+
+  it("returns error when updateUser throws", async () => {
+    mockGetAuth.mockResolvedValue(adminAuthResult);
+    mockGetUserById.mockResolvedValue(regularUser);
+    mockIsEmailTaken.mockResolvedValue(false);
+    mockIsUsernameTaken.mockResolvedValue(false);
+    mockUpdateUser.mockRejectedValue(new Error("DB failure"));
+
+    const result = await editUserAction(2, validEdit);
+
+    expect(result).toEqual({
+      success: false,
+      error: "Failed to update user",
+    });
+  });
+});
+
+// ============================================================================
+// resetUserPasswordAction
+// ============================================================================
+
+describe("resetUserPasswordAction", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const validPassword = "NewSecurePassword123";
+
+  it("returns error when not authenticated", async () => {
+    mockGetAuth.mockResolvedValue(null);
+
+    const result = await resetUserPasswordAction(2, validPassword);
+
+    expect(result).toEqual({ success: false, error: "Not authenticated" });
+    expect(mockUpdateUserPassword).not.toHaveBeenCalled();
+  });
+
+  it("returns error when authenticated as non-admin (user role)", async () => {
+    mockGetAuth.mockResolvedValue(userAuthResult);
+
+    const result = await resetUserPasswordAction(2, validPassword);
+
+    expect(result).toEqual({ success: false, error: "Admin access required" });
+    expect(mockUpdateUserPassword).not.toHaveBeenCalled();
+  });
+
+  it("returns error when authenticated as guest", async () => {
+    mockGetAuth.mockResolvedValue(guestAuthResult);
+
+    const result = await resetUserPasswordAction(2, validPassword);
+
+    expect(result).toEqual({ success: false, error: "Admin access required" });
+    expect(mockUpdateUserPassword).not.toHaveBeenCalled();
+  });
+
+  it("prevents admin from resetting their own password", async () => {
+    mockGetAuth
+      .mockResolvedValueOnce(adminAuthResult) // requireAdmin
+      .mockResolvedValueOnce(adminAuthResult); // self-check
+
+    const result = await resetUserPasswordAction(1, validPassword); // adminUser.id === 1
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/Cannot reset your own password/);
+    expect(result.error).toMatch(/profile/i);
+    expect(mockUpdateUserPassword).not.toHaveBeenCalled();
+  });
+
+  it("returns error for password shorter than 8 characters", async () => {
+    mockGetAuth
+      .mockResolvedValueOnce(adminAuthResult) // requireAdmin
+      .mockResolvedValueOnce(adminAuthResult); // self-check
+
+    const result = await resetUserPasswordAction(2, "short");
+
+    expect(result).toEqual({
+      success: false,
+      error: "Password must be at least 8 characters",
+    });
+    expect(mockUpdateUserPassword).not.toHaveBeenCalled();
+  });
+
+  it("returns error when target user not found", async () => {
+    mockGetAuth
+      .mockResolvedValueOnce(adminAuthResult)
+      .mockResolvedValueOnce(adminAuthResult);
+    mockGetUserById.mockResolvedValue(null);
+
+    const result = await resetUserPasswordAction(999, validPassword);
+
+    expect(result).toEqual({ success: false, error: "User not found" });
+    expect(mockUpdateUserPassword).not.toHaveBeenCalled();
+  });
+
+  it("resets password and invalidates sessions on success", async () => {
+    mockGetAuth
+      .mockResolvedValueOnce(adminAuthResult)
+      .mockResolvedValueOnce(adminAuthResult);
+    mockGetUserById.mockResolvedValue(regularUser);
+    mockUpdateUserPassword.mockResolvedValue(undefined);
+    mockDeleteAllUserSessionsFromDb.mockResolvedValue(undefined);
+
+    const result = await resetUserPasswordAction(2, validPassword);
+
+    expect(result).toEqual({ success: true });
+    expect(mockUpdateUserPassword).toHaveBeenCalledWith(2, validPassword);
+    expect(mockDeleteAllUserSessionsFromDb).toHaveBeenCalledWith(2);
+  });
+
+  it("allows resetting another admin's password", async () => {
+    const otherAdmin = { ...adminUser, id: 3, email: "admin2@example.com" };
+    mockGetAuth
+      .mockResolvedValueOnce(adminAuthResult) // requireAdmin
+      .mockResolvedValueOnce(adminAuthResult); // self-check (id:1, resetting id:3)
+    mockGetUserById.mockResolvedValue(otherAdmin);
+    mockUpdateUserPassword.mockResolvedValue(undefined);
+    mockDeleteAllUserSessionsFromDb.mockResolvedValue(undefined);
+
+    const result = await resetUserPasswordAction(3, validPassword);
+
+    expect(result).toEqual({ success: true });
+    expect(mockUpdateUserPassword).toHaveBeenCalledWith(3, validPassword);
+    expect(mockDeleteAllUserSessionsFromDb).toHaveBeenCalledWith(3);
+  });
+
+  it("returns error when updateUserPassword throws", async () => {
+    mockGetAuth
+      .mockResolvedValueOnce(adminAuthResult)
+      .mockResolvedValueOnce(adminAuthResult);
+    mockGetUserById.mockResolvedValue(regularUser);
+    mockUpdateUserPassword.mockRejectedValue(new Error("DB error"));
+
+    const result = await resetUserPasswordAction(2, validPassword);
+
+    expect(result).toEqual({
+      success: false,
+      error: "Failed to reset password",
+    });
   });
 });

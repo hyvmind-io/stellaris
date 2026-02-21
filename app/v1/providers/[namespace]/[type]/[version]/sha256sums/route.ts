@@ -5,6 +5,7 @@ import { notFound, validationError, internalError } from "@/lib/api/errors";
 import { textResponse } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/middleware";
 import { isStrictMode } from "@/lib/auth/registry-mode";
+import { resolveProviderCoordinates } from "@/lib/data/aliases";
 import { getObject } from "@/lib/storage";
 /**
  * GET /v1/providers/:namespace/:type/:version/sha256sums
@@ -44,7 +45,8 @@ export async function GET(
     }
 
     const { namespace, type, version } = parsed.data;
-    const key = `providers/${namespace}/${type}/${version}/SHA256SUMS`;
+    const canonical = await resolveProviderCoordinates(namespace, type);
+    const key = `providers/${canonical.namespace}/${canonical.type}/${version}/SHA256SUMS`;
 
     const object = await getObject(key);
     if (!object) {

@@ -23,7 +23,10 @@
     {
       "binding": "DB",
       "database_name": "stellaris-db",
-      "database_id": "placeholder-update-after-creation"
+      "database_id": "placeholder-update-after-creation",
+      // Wrangler migration tracking — enables `wrangler d1 migrations apply`
+      // to apply only pending migrations and record applied ones in D1_MIGRATIONS.
+      "migrations_dir": "drizzle"
     }
   ],
   // R2 Bucket — Module/provider artifact storage

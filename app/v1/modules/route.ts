@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { moduleListQuery } from "@/lib/validation/registry";
 import { validationError, internalError } from "@/lib/api/errors";
 import { jsonResponse } from "@/lib/api/response";
-import { findAllModules } from "@/lib/data/modules";
+import { findAllModules, resolveModuleTags } from "@/lib/data/modules";
 import { requireAuth } from "@/lib/auth/middleware";
 
 /**
@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
         source: m.source,
         published_at: m.publishedAt.toISOString(),
         downloads: m.downloads,
+        tags: resolveModuleTags(m),
       })),
     });
   } catch (error) {

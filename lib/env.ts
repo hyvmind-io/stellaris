@@ -30,6 +30,22 @@ const envSchema = z.object({
     z.string().url().optional(),
   ),
   S3_FORCE_PATH_STYLE: z.enum(["true", "false"]).optional(),
+  // Upstream Proxy — fallback to public registries for missing modules/providers
+  // When enabled, read/query/download requests that return 404 locally will be
+  // proxied to upstream registries in order. Write/delete routes are never proxied.
+  MODULE_UPSTREAM_PROXY_ENABLED: z.enum(["true", "false"]).default("false"),
+  PROVIDER_UPSTREAM_PROXY_ENABLED: z.enum(["true", "false"]).default("false"),
+  // Comma or newline-separated list of upstream registry base URLs.
+  // Overrides built-in defaults (OpenTofu → HashiCorp). Set to empty string to
+  // explicitly disable upstream fallback even when the proxy is enabled.
+  MODULE_UPSTREAM_REGISTRIES: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v)),
+  PROVIDER_UPSTREAM_REGISTRIES: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v)),
 });
 
 export const env = envSchema.parse(process.env);

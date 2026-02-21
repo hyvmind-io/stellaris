@@ -28,6 +28,14 @@ export const modules = sqliteTable(
       .notNull()
       .$defaultFn(() => new Date()),
     /**
+     * Tags map a module to one or more providers/systems (e.g., ["aws", "gcp"]).
+     * Stored as a JSON-encoded array of strings in a plain text column.
+     * Parsed manually via `parseTags()` in the data layer to avoid ORM-level
+     * JSON.parse crashes on legacy rows with malformed values.
+     * Nullable for backward compatibility — when null, callers fall back to [provider].
+     */
+    tags: text("tags"),
+    /**
      * updatedAt mirrors publishedAt — module versions are immutable (publish/delete only).
      * This field is set once at publish time and never changed. It exists to satisfy
      * ORM conventions and potential future use if module metadata editing is added.
@@ -35,6 +43,13 @@ export const modules = sqliteTable(
     updatedAt: integer("updated_at", { mode: "timestamp" })
       .notNull()
       .$defaultFn(() => new Date()),
+    /**
+     * Monotonically increasing revision counter for optimistic concurrency control.
+     * Exposed as a weak ETag (`W/"<revision>"`) in admin API responses.
+     * Clients must send `If-Match: W/"<revision>"` for conditional updates.
+     * Incremented atomically on every successful update.
+     */
+    revision: integer("revision").notNull().default(1),
   },
   (table) => [
     uniqueIndex("modules_unique_idx").on(
@@ -66,6 +81,15 @@ export const providers = sqliteTable(
     publishedAt: integer("published_at", { mode: "timestamp" })
       .notNull()
       .$defaultFn(() => new Date()),
+    /** Tracks the last metadata update. Set to publishedAt initially. */
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    /**
+     * Monotonically increasing revision counter for optimistic concurrency control.
+     * Same semantics as modules.revision — see that column for details.
+     */
+    revision: integer("revision").notNull().default(1),
   },
   (table) => [
     uniqueIndex("providers_unique_idx").on(
@@ -77,9 +101,6 @@ export const providers = sqliteTable(
   ],
 );
 
-// NOTE: The `providers` table intentionally omits `updatedAt`. Provider versions
-// are immutable — once published, only deleted. No metadata editing is supported.
-// If editing is added in the future, add updatedAt with a proper migration.
 export type Provider = typeof providers.$inferSelect;
 export type NewProvider = typeof providers.$inferInsert;
 
@@ -247,3 +268,121 @@ export const systemSettings = sqliteTable("system_settings", {
 
 export type SystemSetting = typeof systemSettings.$inferSelect;
 export type NewSystemSetting = typeof systemSettings.$inferInsert;
+
+// ============================================================================
+// Module Aliases
+// ============================================================================
+
+/**
+ * Redirects for renamed/moved modules.
+ * When a client requests (sourceNamespace, sourceName, sourceProvider),
+ * the registry resolves it to (targetNamespace, targetName, targetProvider)
+ * transparently. Each source tuple is unique — only one redirect per alias.
+ */
+export const moduleAliases = sqliteTable(
+  "module_aliases",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    sourceNamespace: text("source_namespace").notNull(),
+    sourceName: text("source_name").notNull(),
+    sourceProvider: text("source_provider").notNull(),
+    targetNamespace: text("target_namespace").notNull(),
+    targetName: text("target_name").notNull(),
+    targetProvider: text("target_provider").notNull(),
+    createdBy: text("created_by"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [
+    uniqueIndex("module_aliases_source_idx").on(
+      table.sourceNamespace,
+      table.sourceName,
+      table.sourceProvider,
+    ),
+    index("module_aliases_target_idx").on(
+      table.targetNamespace,
+      table.targetName,
+      table.targetProvider,
+    ),
+  ],
+);
+
+export type ModuleAlias = typeof moduleAliases.$inferSelect;
+export type NewModuleAlias = typeof moduleAliases.$inferInsert;
+
+// ============================================================================
+// Provider Aliases
+// ============================================================================
+
+/**
+ * Redirects for renamed/moved providers.
+ * Same concept as module aliases but keyed on (namespace, type).
+ */
+export const providerAliases = sqliteTable(
+  "provider_aliases",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    sourceNamespace: text("source_namespace").notNull(),
+    sourceType: text("source_type").notNull(),
+    targetNamespace: text("target_namespace").notNull(),
+    targetType: text("target_type").notNull(),
+    createdBy: text("created_by"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [
+    uniqueIndex("provider_aliases_source_idx").on(
+      table.sourceNamespace,
+      table.sourceType,
+    ),
+    index("provider_aliases_target_idx").on(
+      table.targetNamespace,
+      table.targetType,
+    ),
+  ],
+);
+
+export type ProviderAlias = typeof providerAliases.$inferSelect;
+export type NewProviderAlias = typeof providerAliases.$inferInsert;
+
+// ============================================================================
+// Audit Logs
+// ============================================================================
+
+/**
+ * Append-only audit trail for admin mutations.
+ * Every create/update/delete through admin endpoints writes a log entry.
+ * The metadata column holds a JSON-encoded diff or context payload.
+ */
+export const auditLogs = sqliteTable(
+  "audit_logs",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    /** Dot-separated action verb, e.g. "module.create", "provider.delete". */
+    action: text("action").notNull(),
+    /** Top-level resource kind: "module", "provider", "alias", "api_key". */
+    resourceType: text("resource_type").notNull(),
+    /** Human-readable resource identifier, e.g. "hashicorp/consul/aws/1.0.0". */
+    resourceId: text("resource_id").notNull(),
+    /** Who performed the action — API key name, user id, or "system". */
+    actorId: text("actor_id"),
+    /** Actor kind: "api_key", "user", "system". */
+    actorType: text("actor_type"),
+    /** Arbitrary JSON payload — old/new values, request metadata, etc. */
+    metadata: text("metadata", { mode: "json" }),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [
+    index("audit_logs_action_idx").on(table.action),
+    index("audit_logs_resource_idx").on(table.resourceType, table.resourceId),
+    index("audit_logs_actor_idx").on(table.actorType, table.actorId),
+    index("audit_logs_created_at_idx").on(table.createdAt),
+  ],
+);
+
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type NewAuditLog = typeof auditLogs.$inferInsert;
