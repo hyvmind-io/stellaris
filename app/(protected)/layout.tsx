@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { requireUser } from "@/lib/auth/get-auth";
 
+export const dynamic = "force-dynamic";
+
 interface ProtectedLayoutProps {
   children: ReactNode;
 }

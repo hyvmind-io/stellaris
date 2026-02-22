@@ -3,7 +3,7 @@
  * base URLs for module and provider fallback proxying.
  *
  * Precedence (highest → lowest):
- *   1. DB system_settings override (explicit empty = no upstream)
+ *   1. DB system_settings override (explicit empty list = no upstream)
  *   2. Environment variable override
  *   3. Built-in defaults (OpenTofu then HashiCorp)
  *
@@ -39,7 +39,7 @@ export const SETTINGS_KEY = {
  * Parse a raw string that may contain multiple upstream URLs separated by
  * commas, newlines, or both. Each URL is trimmed and normalised:
  *  - Trailing slashes stripped
- *  - Must be a valid URL with https: or http: protocol
+ *  - Must be a valid URL with https: protocol
  *  - Duplicates removed (preserving first occurrence)
  *
  * Returns an array of normalised base URLs, or an empty array when the input
@@ -77,7 +77,7 @@ export function normaliseRegistryUrl(raw: string): string | null {
 
   try {
     const url = new URL(trimmed);
-    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    if (url.protocol !== "https:") return null;
     // Strip trailing slash(es) from origin+pathname
     return (url.origin + url.pathname).replace(/\/+$/, "");
   } catch {
@@ -94,7 +94,9 @@ export function normaliseRegistryUrl(raw: string): string | null {
  *
  * Precedence:
  *   1. DB setting `module_upstream_registries` (JSON array of strings)
- *      — explicit `"[]"` means "no upstream, deliberately empty"
+ *      - `null`/missing override: fall through to env/defaults
+ *      - explicit `"[]"`: no upstream, deliberately empty
+ *      - non-empty array: explicit ordered list
  *   2. Env var `MODULE_UPSTREAM_REGISTRIES`
  *   3. Built-in defaults
  */

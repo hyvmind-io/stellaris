@@ -1,5 +1,16 @@
 import { z } from "zod";
 
+const httpsUrlSchema = z
+  .string()
+  .url()
+  .refine((value) => {
+    try {
+      return new URL(value).protocol === "https:";
+    } catch {
+      return false;
+    }
+  }, "Must be an HTTPS URL");
+
 // ============================================================================
 // Base Schemas
 // ============================================================================
@@ -285,16 +296,13 @@ export const proxySettingsPatch = z
      * Set to empty array `[]` to explicitly disable upstream.
      * Set to `null` to clear the DB override (fall back to env/defaults).
      */
-    module_upstream_registries: z.array(z.string().url()).nullable().optional(),
+    module_upstream_registries: z.array(httpsUrlSchema).nullable().optional(),
     /**
      * Ordered list of upstream registry base URLs for providers.
      * Set to empty array `[]` to explicitly disable upstream.
      * Set to `null` to clear the DB override (fall back to env/defaults).
      */
-    provider_upstream_registries: z
-      .array(z.string().url())
-      .nullable()
-      .optional(),
+    provider_upstream_registries: z.array(httpsUrlSchema).nullable().optional(),
   })
   .strict({ message: "Unknown fields are not allowed" })
   .refine(

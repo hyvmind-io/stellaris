@@ -124,7 +124,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     );
 
     try {
-      const module = await saveModule({
+      const moduleRecord = await saveModule({
         namespace,
         name,
         provider: system,
@@ -148,7 +148,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             name,
             provider: system,
             version,
-            revision: { nextRevision: module.revision },
+            revision: { nextRevision: moduleRecord.revision },
             changedFields: [
               "version",
               "owner",
@@ -162,7 +162,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         console.error("Failed to write module.create audit log:", auditError);
       }
 
-      return etagResponse(serializeModule(module), module.revision, 201);
+      return etagResponse(
+        serializeModule(moduleRecord),
+        moduleRecord.revision,
+        201,
+      );
     } catch (dbError) {
       try {
         await deleteObject(r2Key);

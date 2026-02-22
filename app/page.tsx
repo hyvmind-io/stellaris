@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import {
   Package,
@@ -78,7 +79,13 @@ export default async function HomePage() {
           <h2 className="text-lg font-semibold text-center mb-4">
             Find what you need
           </h2>
-          <SearchInput placeholder="Search modules..." className="mb-3" />
+          <Suspense
+            fallback={
+              <div className="mb-3 h-10 w-full rounded-md border border-border" />
+            }
+          >
+            <SearchInput placeholder="Search modules..." className="mb-3" />
+          </Suspense>
           <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground">
             <span>or browse</span>
             <Link

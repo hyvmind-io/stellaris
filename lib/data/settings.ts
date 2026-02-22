@@ -12,14 +12,18 @@ export const SIGNUP_ENABLED_KEY = "signup_enabled";
 
 // Upstream proxy — controls whether the registry proxies requests to upstream
 // registries when a module/provider is not found locally.
+/** @deprecated Prefer SETTINGS_KEY.moduleProxyEnabled in lib/upstream/config.ts. */
 export const MODULE_UPSTREAM_PROXY_ENABLED_KEY =
   "module_upstream_proxy_enabled";
+/** @deprecated Prefer SETTINGS_KEY.providerProxyEnabled in lib/upstream/config.ts. */
 export const PROVIDER_UPSTREAM_PROXY_ENABLED_KEY =
   "provider_upstream_proxy_enabled";
 
 // Upstream registry lists — JSON arrays of registry base URLs.
 // Stored as JSON strings internally; the data layer exposes typed accessors.
+/** @deprecated Prefer SETTINGS_KEY.moduleRegistries in lib/upstream/config.ts. */
 export const MODULE_UPSTREAM_REGISTRIES_KEY = "module_upstream_registries";
+/** @deprecated Prefer SETTINGS_KEY.providerRegistries in lib/upstream/config.ts. */
 export const PROVIDER_UPSTREAM_REGISTRIES_KEY = "provider_upstream_registries";
 
 // ============================================================================
@@ -42,8 +46,15 @@ export async function isSignupEnabled(): Promise<boolean> {
     if (!setting) return true; // default open
     return setting.value === "true";
   } catch (error) {
-    console.error("[Settings] Error reading signup status:", error);
-    return true; // fail-open: don't block signups on DB error
+    console.error(
+      "[Settings] Failed to read signup status; defaulting to closed",
+      {
+        key: SIGNUP_ENABLED_KEY,
+        failMode: "closed",
+        error,
+      },
+    );
+    return false; // fail-closed on DB/read errors
   }
 }
 
@@ -107,19 +118,6 @@ export async function deleteSystemSetting(key: string): Promise<void> {
   await db.delete(systemSettings).where(eq(systemSettings.key, key));
 }
 
-/**
- * Get all settings as a key→value map.
- */
-export async function getSystemSettings(): Promise<Record<string, string>> {
-  const db = getDb();
-  const rows = await db.select().from(systemSettings);
-
-  return rows.reduce<Record<string, string>>((acc, row) => {
-    acc[row.key] = row.value;
-    return acc;
-  }, {});
-}
-
 // ============================================================================
 // Upstream Proxy Settings
 // ============================================================================
@@ -127,6 +125,7 @@ export async function getSystemSettings(): Promise<Record<string, string>> {
 /**
  * Check if upstream proxying is enabled for modules.
  * Defaults to false (local-only) if the key is not set.
+ * @deprecated Prefer isModuleProxyEnabled() from lib/upstream/config.ts.
  */
 export async function isModuleUpstreamProxyEnabled(): Promise<boolean> {
   const value = await getSystemSetting(
@@ -138,6 +137,7 @@ export async function isModuleUpstreamProxyEnabled(): Promise<boolean> {
 
 /**
  * Enable or disable upstream proxying for modules.
+ * @deprecated Prefer updateProxySettings() from lib/upstream/config-service.ts.
  */
 export async function setModuleUpstreamProxyEnabled(
   enabled: boolean,
@@ -148,6 +148,7 @@ export async function setModuleUpstreamProxyEnabled(
 /**
  * Check if upstream proxying is enabled for providers.
  * Defaults to false (local-only) if the key is not set.
+ * @deprecated Prefer isProviderProxyEnabled() from lib/upstream/config.ts.
  */
 export async function isProviderUpstreamProxyEnabled(): Promise<boolean> {
   const value = await getSystemSetting(
@@ -159,6 +160,7 @@ export async function isProviderUpstreamProxyEnabled(): Promise<boolean> {
 
 /**
  * Enable or disable upstream proxying for providers.
+ * @deprecated Prefer updateProxySettings() from lib/upstream/config-service.ts.
  */
 export async function setProviderUpstreamProxyEnabled(
   enabled: boolean,
@@ -177,6 +179,7 @@ export async function setProviderUpstreamProxyEnabled(
  * Internally stored as a JSON string (e.g. `["https://registry.terraform.io"]`).
  * The admin UI should convert between multiline text (one URL per line) and
  * this array format when saving/loading.
+ * @deprecated Prefer resolveModuleRegistries() from lib/upstream/config.ts.
  */
 export async function getModuleUpstreamRegistries(): Promise<string[]> {
   const raw = await getSystemSetting(MODULE_UPSTREAM_REGISTRIES_KEY);
@@ -186,6 +189,7 @@ export async function getModuleUpstreamRegistries(): Promise<string[]> {
 /**
  * Save the list of upstream module registry URLs.
  * Accepts an array of URL strings; empty array clears the list.
+ * @deprecated Prefer updateProxySettings() from lib/upstream/config-service.ts.
  */
 export async function setModuleUpstreamRegistries(
   urls: string[],
@@ -196,6 +200,7 @@ export async function setModuleUpstreamRegistries(
 /**
  * Get the list of upstream provider registry URLs.
  * Returns an empty array if not configured.
+ * @deprecated Prefer resolveProviderRegistries() from lib/upstream/config.ts.
  */
 export async function getProviderUpstreamRegistries(): Promise<string[]> {
   const raw = await getSystemSetting(PROVIDER_UPSTREAM_REGISTRIES_KEY);
@@ -205,6 +210,7 @@ export async function getProviderUpstreamRegistries(): Promise<string[]> {
 /**
  * Save the list of upstream provider registry URLs.
  * Accepts an array of URL strings; empty array clears the list.
+ * @deprecated Prefer updateProxySettings() from lib/upstream/config-service.ts.
  */
 export async function setProviderUpstreamRegistries(
   urls: string[],

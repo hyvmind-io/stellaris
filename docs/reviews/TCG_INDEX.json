@@ -1,0 +1,229 @@
+{
+  "generatedAt": "2026-02-22",
+  "repo": "stellaris",
+  "estimationMethod": "chars_div_3_5",
+  "scope": {
+    "includedExtensions": [
+      ".ts",
+      ".tsx",
+      ".css",
+      ".sql",
+      ".json",
+      ".jsonc",
+      ".mjs",
+      ".d.ts",
+      ".sh"
+    ],
+    "excludedPrefixes": [
+      "node_modules/",
+      ".git/",
+      ".next/",
+      ".wrangler/",
+      ".jj/",
+      "docs/",
+      "drizzle/meta/"
+    ],
+    "filesAssigned": 242,
+    "orphanFiles": 0
+  },
+  "groups": [
+    {
+      "name": "TCG-FOUNDATION",
+      "estimatedTokens": 18456,
+      "files": 18,
+      "purpose": "Shared schema/types, validation, API contracts, core utilities",
+      "globs": [
+        "db/*.ts",
+        "types/*.ts",
+        "lib/api/*.ts",
+        "lib/validation/*.ts",
+        "lib/utils.ts",
+        "lib/utils/version.ts",
+        "lib/utils/sql.ts",
+        "lib/env.ts",
+        "lib/storage/types.ts",
+        "lib/data/errors.ts",
+        "lib/data/concurrency.ts"
+      ]
+    },
+    {
+      "name": "TCG-AUTH-SECURITY",
+      "estimatedTokens": 10918,
+      "files": 16,
+      "purpose": "Authentication, middleware, permission gates, auth UI routes",
+      "globs": [
+        "lib/auth/*.ts",
+        "middleware.ts",
+        "lib/permissions.ts",
+        "app/(auth)/**",
+        "components/auth/**",
+        "app/unauthorized/**"
+      ]
+    },
+    {
+      "name": "TCG-MODULES-DOMAIN",
+      "estimatedTokens": 15614,
+      "files": 14,
+      "purpose": "Terraform modules domain data/API/protected UI",
+      "globs": [
+        "lib/data/modules.ts",
+        "lib/data/aliases.ts",
+        "app/v1/modules/**",
+        "app/(protected)/modules/**",
+        "components/module*.tsx"
+      ]
+    },
+    {
+      "name": "TCG-PROVIDERS-DOMAIN",
+      "estimatedTokens": 22956,
+      "files": 24,
+      "purpose": "Provider registry, upstream proxy, storage and delivery",
+      "globs": [
+        "lib/data/providers.ts",
+        "lib/data/stats.ts",
+        "lib/storage/**",
+        "lib/upstream/**",
+        "app/v1/providers/**",
+        "app/.well-known/**",
+        "app/health/**",
+        "app/(protected)/providers/**",
+        "components/provider*.tsx"
+      ]
+    },
+    {
+      "name": "TCG-ADMIN-OPS",
+      "estimatedTokens": 116167,
+      "files": 58,
+      "purpose": "Admin/user/settings/audit/profile operations",
+      "globs": [
+        "app/(protected)/admin/**",
+        "app/v1/admin/**",
+        "app/v1/api-keys/**",
+        "components/admin/**",
+        "app/(protected)/profile/**",
+        "components/profile/**",
+        "app/actions/**",
+        "lib/data/users.ts",
+        "lib/data/settings.ts",
+        "lib/data/api-keys.ts",
+        "lib/data/audit.ts"
+      ]
+    },
+    {
+      "name": "TCG-UI-SHARED",
+      "estimatedTokens": 24516,
+      "files": 37,
+      "purpose": "Shared UI shell and component primitives",
+      "globs": [
+        "app/layout.tsx",
+        "app/(protected)/layout.tsx",
+        "app/page.tsx",
+        "app/globals.css",
+        "components/ui/**",
+        "components/layout/**",
+        "components/search-input.tsx",
+        "components/theme-toggle.tsx",
+        "components/pagination.tsx",
+        "components/code-block.tsx",
+        "components/copy-button.tsx",
+        "components/stat-card.tsx"
+      ]
+    },
+    {
+      "name": "TCG-TESTS-LIB-CORE",
+      "estimatedTokens": 67716,
+      "files": 30,
+      "purpose": "Library-level unit tests and shared mocks",
+      "globs": [
+        "__tests__/lib/**",
+        "__tests__/app/actions/**",
+        "__mocks__/**",
+        "vitest.config.ts"
+      ]
+    },
+    {
+      "name": "TCG-TESTS-APP-ROUTES",
+      "estimatedTokens": 52922,
+      "files": 22,
+      "purpose": "App/API route integration-style tests",
+      "globs": ["__tests__/app/** (excluding __tests__/app/actions/**)"]
+    },
+    {
+      "name": "TCG-CONFIG-INFRA",
+      "estimatedTokens": 13283,
+      "files": 23,
+      "purpose": "Build/runtime/deployment/migration and scripts",
+      "globs": [
+        "package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml",
+        "tsconfig.json",
+        "next.config.ts",
+        "open-next.config.ts",
+        "postcss.config.mjs",
+        "wrangler.jsonc",
+        "drizzle.config.ts",
+        "drizzle/**",
+        "scripts/**",
+        "components.json",
+        "next-env.d.ts"
+      ]
+    }
+  ],
+  "dependencies": {
+    "TCG-ADMIN-OPS": [
+      "TCG-UI-SHARED",
+      "TCG-FOUNDATION",
+      "TCG-AUTH-SECURITY",
+      "TCG-PROVIDERS-DOMAIN",
+      "TCG-MODULES-DOMAIN"
+    ],
+    "TCG-AUTH-SECURITY": ["TCG-FOUNDATION", "TCG-UI-SHARED", "TCG-ADMIN-OPS"],
+    "TCG-MODULES-DOMAIN": [
+      "TCG-FOUNDATION",
+      "TCG-UI-SHARED",
+      "TCG-AUTH-SECURITY",
+      "TCG-PROVIDERS-DOMAIN"
+    ],
+    "TCG-PROVIDERS-DOMAIN": [
+      "TCG-FOUNDATION",
+      "TCG-UI-SHARED",
+      "TCG-AUTH-SECURITY",
+      "TCG-MODULES-DOMAIN",
+      "TCG-ADMIN-OPS"
+    ],
+    "TCG-UI-SHARED": [
+      "TCG-FOUNDATION",
+      "TCG-AUTH-SECURITY",
+      "TCG-ADMIN-OPS",
+      "TCG-PROVIDERS-DOMAIN"
+    ],
+    "TCG-TESTS-LIB-CORE": [
+      "TCG-FOUNDATION",
+      "TCG-AUTH-SECURITY",
+      "TCG-MODULES-DOMAIN",
+      "TCG-PROVIDERS-DOMAIN",
+      "TCG-ADMIN-OPS"
+    ],
+    "TCG-TESTS-APP-ROUTES": [
+      "TCG-FOUNDATION",
+      "TCG-AUTH-SECURITY",
+      "TCG-MODULES-DOMAIN",
+      "TCG-PROVIDERS-DOMAIN",
+      "TCG-ADMIN-OPS"
+    ],
+    "TCG-FOUNDATION": [],
+    "TCG-CONFIG-INFRA": []
+  },
+  "recommendedLoadOrderForReview": [
+    "TCG-FOUNDATION",
+    "TCG-AUTH-SECURITY",
+    "TCG-UI-SHARED",
+    "TCG-MODULES-DOMAIN",
+    "TCG-PROVIDERS-DOMAIN",
+    "TCG-ADMIN-OPS",
+    "TCG-TESTS-LIB-CORE",
+    "TCG-TESTS-APP-ROUTES",
+    "TCG-CONFIG-INFRA"
+  ]
+}

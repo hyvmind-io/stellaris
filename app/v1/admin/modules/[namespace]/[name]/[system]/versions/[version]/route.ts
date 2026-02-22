@@ -64,14 +64,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     if (!parsed.success) return validationError(parsed.error.issues);
 
     const { namespace, name, system, version } = parsed.data;
-    const module = await findModule(namespace, name, system, version);
-    if (!module) {
+    const moduleRecord = await findModule(namespace, name, system, version);
+    if (!moduleRecord) {
       return notFound(
         `Module ${namespace}/${name}/${system} version ${version} not found`,
       );
     }
 
-    return etagResponse(serializeModule(module), module.revision);
+    return etagResponse(serializeModule(moduleRecord), moduleRecord.revision);
   } catch (error) {
     console.error("Error getting admin module version:", error);
     return internalError();
@@ -166,20 +166,20 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     }
 
     const { namespace, name, system, version } = parsed.data;
-    const module = await findModule(namespace, name, system, version);
-    if (!module) {
+    const moduleRecord = await findModule(namespace, name, system, version);
+    if (!moduleRecord) {
       return notFound(
         `Module ${namespace}/${name}/${system} version ${version} not found`,
       );
     }
 
-    if (module.revision !== ifMatch.revision) {
+    if (moduleRecord.revision !== ifMatch.revision) {
       return preconditionFailed();
     }
 
-    if (module.location) {
+    if (moduleRecord.location) {
       try {
-        await deleteObject(module.location);
+        await deleteObject(moduleRecord.location);
       } catch (cleanupError) {
         console.error("Error cleaning up module artifact:", cleanupError);
         return internalError("Failed to cleanup module artifact");

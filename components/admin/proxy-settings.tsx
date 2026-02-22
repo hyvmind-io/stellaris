@@ -33,6 +33,15 @@ function textareaToUrls(text: string): string[] {
 }
 
 /**
+ * Map textarea content to action override semantics.
+ * Empty text clears DB override (falls back to env/defaults).
+ */
+function textareaToRegistryOverride(text: string): string[] | null {
+  const urls = textareaToUrls(text);
+  return urls.length === 0 ? null : urls;
+}
+
+/**
  * Convert an array of URLs into a newline-separated string for display.
  */
 function urlsToTextarea(urls: string[]): string {
@@ -133,8 +142,10 @@ export function ProxySettings() {
       const result = await updateProxySettingsAction({
         module_proxy_enabled: moduleProxyEnabled,
         provider_proxy_enabled: providerProxyEnabled,
-        module_upstream_registries: textareaToUrls(moduleRegistries),
-        provider_upstream_registries: textareaToUrls(providerRegistries),
+        module_upstream_registries:
+          textareaToRegistryOverride(moduleRegistries),
+        provider_upstream_registries:
+          textareaToRegistryOverride(providerRegistries),
       });
 
       if (result.success && result.settings) {

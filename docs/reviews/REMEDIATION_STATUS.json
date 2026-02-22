@@ -1,0 +1,162 @@
+{
+  "last_updated": "2026-02-22",
+  "source_docs": [
+    "docs/reviews/TCG_CONTEXT_GROUPS.md",
+    "docs/reviews/TCG_INDEX.json",
+    "docs/reviews/CODEBASE_REVIEW_FINDINGS.md"
+  ],
+  "objectives": [
+    {
+      "objective_id": "OBJ-DEAD-CODE",
+      "title": "Dead code cleanup after functional remediation",
+      "status": "done",
+      "phase": "RB3",
+      "depends_on": ["REV-005", "REV-007"],
+      "validation_gate": "No-callsite verification for candidates, then pnpm type-check and pnpm test -- --run",
+      "rollback": "Restore removed exports/files from VCS and rerun full regression checks",
+      "evidence_docs": [
+        "lib/data/modules.ts",
+        "lib/data/providers.ts",
+        "lib/data/settings.ts",
+        "lib/auth/api-keys.ts",
+        "lib/auth/user.ts"
+      ],
+      "notes": "RB3 executed with incremental dead-code cleanup. Removed unused exports (`deleteModule`, `deleteProvider`, `createApiKey`, `getSystemSettings`, `getUserById`, `getUserByUsername`) and converted `NEUTRAL_PROVIDER_KEYWORD` to internal-only scope. Medium-confidence legacy wrappers in `lib/data/settings.ts` were retained but marked deprecated in favor of `lib/upstream/config.ts` and `lib/upstream/config-service.ts` to minimize blast radius."
+    }
+  ],
+  "issues": [
+    {
+      "issue_id": "REV-001",
+      "title": "Cloudflare binding type mismatch blocks type-check/build",
+      "severity": "critical",
+      "status": "done",
+      "batch_id": "B0",
+      "owner": null,
+      "evidence_docs": ["docs/reviews/CODEBASE_REVIEW_FINDINGS.md"],
+      "notes": "RB0 established deterministic Cloudflare type generation via npm lifecycle hooks (`pretype-check`, `prebuild` -> `pnpm cf-typegen`) and package B completed the remaining build blockers by (1) preventing auth from swallowing Next dynamic/render-control errors via `unstable_rethrow` in `lib/auth/get-auth.ts`, and (2) explicitly forcing dynamic rendering on auth-sensitive layouts (`app/layout.tsx`, `app/(auth)/layout.tsx`, `app/(protected)/layout.tsx`, `app/(protected)/admin/layout.tsx`). Validation evidence: `pnpm type-check` and `pnpm build` both pass with prior dynamic-cookie/static-prerender and sync `getCloudflareContext` errors resolved.",
+      "next_action": "Monitor future auth/layout changes to keep dynamic boundaries explicit and preserve build compatibility.",
+      "proposed_owner_type": "platform",
+      "validation_gate": "pnpm type-check and pnpm build both green with no CloudflareEnv property errors",
+      "risk_level": "high",
+      "rollback": "Revert typing path changes and restore last known-good generated typing artifacts"
+    },
+    {
+      "issue_id": "REV-002",
+      "title": "Lint tooling drift in Next 16 workflow",
+      "severity": "high",
+      "status": "done",
+      "batch_id": "B1",
+      "owner": null,
+      "evidence_docs": [
+        "docs/reviews/CODEBASE_REVIEW_FINDINGS.md",
+        "CONTRIBUTING.md"
+      ],
+      "notes": "RB0 executed: replaced `next lint` script with Next 16-compatible ESLint CLI invocation (`ESLINT_USE_FLAT_CONFIG=false eslint .`) and added root ESLint config (`.eslintrc.json`). Contributor guidance updated in `CONTRIBUTING.md`. Validation evidence: `pnpm lint` passes.",
+      "next_action": "Keep eslint/next versions in lockstep during future framework upgrades.",
+      "proposed_owner_type": "dev-experience",
+      "validation_gate": "pnpm lint passes locally and documented command in CONTRIBUTING matches package scripts",
+      "risk_level": "medium",
+      "rollback": "Restore previous script/docs pair and re-open issue with captured failing command output"
+    },
+    {
+      "issue_id": "REV-003",
+      "title": "Proxy settings empty-list semantics disable fallback unexpectedly",
+      "severity": "high",
+      "status": "done",
+      "batch_id": "B2",
+      "owner": null,
+      "evidence_docs": [
+        "docs/reviews/CODEBASE_REVIEW_FINDINGS.md",
+        "components/admin/proxy-settings.tsx",
+        "app/actions/admin.ts",
+        "__tests__/app/actions/admin-proxy.test.ts",
+        "__tests__/lib/upstream/config.test.ts",
+        "__tests__/lib/validation/registry.test.ts"
+      ],
+      "notes": "RB1 lane A executed: server-action semantics now explicitly distinguish omitted/unchanged (`undefined`), clear override (`null` -> env/defaults), explicit disable (`[]`), and explicit list (`string[]`). Admin UI save path now maps blank textarea to `null` so 'Leave empty to use defaults' no longer stores `[]` and silently disables fallback. Action normalization also rejects invalid entries instead of silently dropping them.",
+      "next_action": "Keep route-level parity work for duplicate admin proxy surfaces in REV-005 scope.",
+      "proposed_owner_type": "backend",
+      "validation_gate": "Proxy settings tests confirm empty input resolves to default fallback behavior and does not persist disabling [] (UI path), while explicit [] remains supported",
+      "risk_level": "high",
+      "rollback": "Revert proxy settings parsing/persistence changes and restore previous serialization behavior"
+    },
+    {
+      "issue_id": "REV-004",
+      "title": "Upstream registry URL policy drift (HTTP accepted)",
+      "severity": "medium",
+      "status": "done",
+      "batch_id": "B3",
+      "owner": null,
+      "evidence_docs": [
+        "docs/reviews/CODEBASE_REVIEW_FINDINGS.md",
+        "lib/upstream/config.ts",
+        "lib/validation/registry.ts",
+        "__tests__/lib/upstream/config.test.ts",
+        "__tests__/lib/validation/registry.test.ts"
+      ],
+      "notes": "RB1 lane A executed: upstream normalization now enforces HTTPS-only in `lib/upstream/config.ts`, admin action update path rejects invalid/non-HTTPS entries with explicit errors, and proxy settings validation schema now requires HTTPS URLs. Unit coverage updated for config/parser, action behavior, and validation schemas.",
+      "next_action": "Maintain HTTPS-only policy across any future route-level proxy settings surface consolidation (REV-005).",
+      "proposed_owner_type": "security",
+      "validation_gate": "Unit tests reject http: upstream URLs and accept normalized https: URLs",
+      "risk_level": "medium",
+      "rollback": "Restore prior URL parser behavior and keep policy mismatch flagged until design decision is finalized"
+    },
+    {
+      "issue_id": "REV-005",
+      "title": "Duplicate admin proxy configuration surfaces",
+      "severity": "medium",
+      "status": "done",
+      "batch_id": "B4",
+      "owner": null,
+      "evidence_docs": [
+        "docs/reviews/CODEBASE_REVIEW_FINDINGS.md",
+        "lib/upstream/config-service.ts",
+        "app/actions/admin.ts",
+        "app/v1/admin/settings/proxy/route.ts",
+        "__tests__/app/actions/admin-proxy.test.ts",
+        "__tests__/app/v1/admin/settings-proxy-route.test.ts"
+      ],
+      "notes": "RB2 executed: consolidated admin proxy settings read/write semantics into shared service (`lib/upstream/config-service.ts`) and rewired both server actions and `/v1/admin/settings/proxy` route to that canonical implementation. This removes dual-write drift and keeps `null` clear-override / `[]` explicit-disable / HTTPS validation semantics consistent across surfaces.",
+      "next_action": "Maintain a single proxy settings service path for future admin surface changes; avoid route/action duplication.",
+      "proposed_owner_type": "backend",
+      "validation_gate": "Route and action paths return consistent payloads with dedicated tests for admin proxy settings endpoint",
+      "risk_level": "medium",
+      "rollback": "Temporarily retain dual paths with explicit sync wrappers while failing tests are addressed"
+    },
+    {
+      "issue_id": "REV-006",
+      "title": "Next.js middleware convention deprecation risk",
+      "severity": "medium",
+      "status": "deferred",
+      "batch_id": "B5",
+      "owner": null,
+      "evidence_docs": ["docs/reviews/CODEBASE_REVIEW_FINDINGS.md"],
+      "notes": "Do not migrate in current scope. OpenNext Cloudflare deployment currently retains middleware path; treat as compatibility exception with guardrails. Re-open only after explicit adapter support/parity for proxy.ts is documented and validated in preview/deploy tests.",
+      "next_action": "Keep middleware.ts as active request gate and track adapter parity signal for proxy.ts migration readiness.",
+      "proposed_owner_type": "platform",
+      "validation_gate": "No migration performed; middleware.ts matcher and auth flow remain covered by targeted tests and preview/deploy checks",
+      "risk_level": "medium",
+      "rollback": "If accidental migration occurs, restore middleware.ts-based gating immediately and rerun preview/deploy validation"
+    },
+    {
+      "issue_id": "REV-007",
+      "title": "Signup fail-open on DB error weakens security posture",
+      "severity": "medium",
+      "status": "done",
+      "batch_id": "B6",
+      "owner": null,
+      "evidence_docs": [
+        "docs/reviews/CODEBASE_REVIEW_FINDINGS.md",
+        "CONTRIBUTING.md",
+        "__tests__/lib/data/settings.test.ts",
+        "__tests__/app/actions/admin.test.ts"
+      ],
+      "notes": "RB1 lane B executed: signup setting DB-read failures now fail closed in both data and admin action paths. Missing setting behavior remains unchanged (default enabled only when key is absent). Added explicit structured error logs for operator visibility and targeted test coverage for DB-error behavior.",
+      "next_action": "Keep fail-closed invariant in future signup setting refactors and monitor logs for repeated DB read failures.",
+      "proposed_owner_type": "security",
+      "validation_gate": "Tests confirm DB error path does not enable signup and surfaces explicit failure state",
+      "risk_level": "high",
+      "rollback": "Restore previous behavior only under explicit incident decision and document temporary risk acceptance"
+    }
+  ]
+}

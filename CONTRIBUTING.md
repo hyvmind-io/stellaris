@@ -88,6 +88,8 @@ pnpm type-check
 
 The project uses TypeScript in strict mode. All code must pass type checking before merging.
 
+`pnpm type-check` automatically refreshes Cloudflare binding types (`cloudflare-env.d.ts`) via `pnpm cf-typegen` before running `tsc`.
+
 ### Linting
 
 ```bash
@@ -95,6 +97,8 @@ pnpm lint
 ```
 
 Linting is configured via ESLint with the `eslint-config-next` preset.
+
+`pnpm lint` runs ESLint directly (Next.js 16-compatible workflow).
 
 ### Database changes
 

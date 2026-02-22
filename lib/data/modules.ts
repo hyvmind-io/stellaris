@@ -13,7 +13,7 @@ import { escapeLike } from "@/lib/utils/sql";
  * Modules published with this provider value can serve requests for any
  * system listed in their `tags` array.
  */
-export const NEUTRAL_PROVIDER_KEYWORD = "multi";
+const NEUTRAL_PROVIDER_KEYWORD = "multi";
 
 /**
  * Provider keywords that are checked during multi-system fallback.
@@ -339,31 +339,6 @@ export async function saveModule(data: {
     .returning();
   // Insert always returns exactly one row on success; failure throws
   return module!;
-}
-
-/**
- * Delete a specific module version.
- * Returns the deleted module (for R2 cleanup), or undefined if not found.
- */
-export async function deleteModule(
-  namespace: string,
-  name: string,
-  provider: string,
-  version: string,
-): Promise<Module | undefined> {
-  const db = getDb();
-  const [deleted] = await db
-    .delete(modules)
-    .where(
-      and(
-        eq(modules.namespace, namespace),
-        eq(modules.name, name),
-        eq(modules.provider, provider),
-        eq(modules.version, version),
-      ),
-    )
-    .returning();
-  return deleted;
 }
 
 /**
