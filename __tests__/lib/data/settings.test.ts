@@ -104,12 +104,24 @@ describe("isSignupEnabled", () => {
     expect(result).toBe(false);
   });
 
-  it("fails open (returns true) on DB error", async () => {
+  it("fails closed (returns false) on DB error with observability log", async () => {
     mockGet.mockRejectedValue(new Error("D1_ERROR: connection timeout"));
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
 
     const result = await isSignupEnabled();
 
-    expect(result).toBe(true);
+    expect(result).toBe(false);
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "[Settings] Failed to read signup status; defaulting to closed",
+      expect.objectContaining({
+        key: SIGNUP_ENABLED_KEY,
+        failMode: "closed",
+      }),
+    );
+
+    consoleErrorSpy.mockRestore();
   });
 });
 

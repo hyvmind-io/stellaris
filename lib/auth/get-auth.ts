@@ -1,5 +1,5 @@
 import "server-only";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import type { AuthUser } from "@/types/auth";
 import {
   getSessionToken,
@@ -36,6 +36,7 @@ export async function getAuth(): Promise<AuthResult | null> {
     const { passwordHash: _, ...safeUser } = result.user;
     return { user: safeUser, sessionId };
   } catch (error) {
+    unstable_rethrow(error);
     console.error("getAuth() failed:", error);
     return null;
   }

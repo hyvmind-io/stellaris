@@ -372,38 +372,6 @@ export async function replaceProviderPlatform(
 }
 
 /**
- * Delete a provider and all associated platforms + GPG keys.
- * Cascade delete is handled by the FK constraint in the schema.
- * Returns the deleted provider and its platforms (for R2 cleanup), or undefined if not found.
- */
-export async function deleteProvider(
-  namespace: string,
-  type: string,
-  version: string,
-): Promise<{ provider: Provider; platforms: ProviderPlatform[] } | undefined> {
-  const db = getDb();
-
-  // Find the provider first (to get platforms for R2 cleanup)
-  const provider = await findProvider(namespace, type, version);
-  if (!provider) return undefined;
-
-  const platforms = await getProviderPlatforms(provider.id);
-
-  // Delete provider (cascade deletes platforms + GPG keys)
-  await db
-    .delete(providers)
-    .where(
-      and(
-        eq(providers.namespace, namespace),
-        eq(providers.type, type),
-        eq(providers.version, version),
-      ),
-    );
-
-  return { provider, platforms };
-}
-
-/**
  * Delete a provider version only if revision matches expectedRevision.
  * Returns deleted provider + platforms for artifact cleanup.
  * Throws RevisionConflictError on revision mismatch.

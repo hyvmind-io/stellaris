@@ -50,15 +50,15 @@ export async function GET(
       name,
       system,
     );
-    const module = await resolveModule(
+    const moduleRecord = await resolveModule(
       canonical.namespace,
       canonical.name,
       canonical.provider,
       version,
     );
 
-    if (module) {
-      const location = `/v1/modules/tarball/${module.location}`;
+    if (moduleRecord) {
+      const location = `/v1/modules/tarball/${moduleRecord.location}`;
       return moduleDownloadResponse(location);
     }
 

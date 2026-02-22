@@ -16,21 +16,6 @@ export async function getUserByEmail(email: string): Promise<User | null> {
   );
 }
 
-export async function getUserById(id: number): Promise<User | null> {
-  const db = getDb();
-  return (await db.select().from(users).where(eq(users.id, id)).get()) ?? null;
-}
-
-export async function getUserByUsername(
-  username: string,
-): Promise<User | null> {
-  const db = getDb();
-  return (
-    (await db.select().from(users).where(eq(users.username, username)).get()) ??
-    null
-  );
-}
-
 export async function createUser(params: {
   email: string;
   username: string;

@@ -4,20 +4,13 @@ import { count, eq } from "drizzle-orm";
 import { getAuth } from "@/lib/auth/get-auth";
 import { getDb } from "@/db/client";
 import { apiKeys, sessions } from "@/db/schema";
+import { isSignupEnabled, setSignupEnabled } from "@/lib/data/settings";
 import {
-  isSignupEnabled,
-  setSignupEnabled,
-  setSystemSetting,
-  deleteSystemSetting,
-} from "@/lib/data/settings";
-import {
-  SETTINGS_KEY,
-  resolveModuleRegistries,
-  resolveProviderRegistries,
-  isModuleProxyEnabled,
-  isProviderProxyEnabled,
-  normaliseRegistryUrl,
-} from "@/lib/upstream/config";
+  getProxySettingsSnapshot,
+  updateProxySettings,
+  type ProxySettings,
+  type UpdateProxySettingsInput,
+} from "@/lib/upstream/config-service";
 import {
   getAllUsers,
   getUserById,
@@ -96,24 +89,10 @@ export interface ResetPasswordResult {
   error?: string;
 }
 
-export interface ProxySettings {
-  module_proxy_enabled: boolean;
-  provider_proxy_enabled: boolean;
-  module_upstream_registries: string[];
-  provider_upstream_registries: string[];
-}
-
 export interface ProxySettingsResult {
   success: boolean;
   settings?: ProxySettings;
   error?: string;
-}
-
-export interface UpdateProxySettingsInput {
-  module_proxy_enabled?: boolean;
-  provider_proxy_enabled?: boolean;
-  module_upstream_registries?: string[] | null;
-  provider_upstream_registries?: string[] | null;
 }
 
 // ============================================================================
@@ -146,8 +125,15 @@ export async function getSignupStatusAction(): Promise<boolean> {
   try {
     return await isSignupEnabled();
   } catch (error) {
-    console.error("[Admin] getSignupStatusAction error:", error);
-    return true; // fail-open
+    console.error(
+      "[Admin] Failed to resolve signup status; defaulting to closed",
+      {
+        action: "getSignupStatusAction",
+        failMode: "closed",
+        error,
+      },
+    );
+    return false; // fail-closed
   }
 }
 
@@ -566,26 +552,10 @@ export async function getProxySettingsAction(): Promise<ProxySettingsResult> {
   }
 
   try {
-    const [
-      moduleEnabled,
-      providerEnabled,
-      moduleRegistries,
-      providerRegistries,
-    ] = await Promise.all([
-      isModuleProxyEnabled(),
-      isProviderProxyEnabled(),
-      resolveModuleRegistries(),
-      resolveProviderRegistries(),
-    ]);
-
+    const settings = await getProxySettingsSnapshot();
     return {
       success: true,
-      settings: {
-        module_proxy_enabled: moduleEnabled,
-        provider_proxy_enabled: providerEnabled,
-        module_upstream_registries: moduleRegistries,
-        provider_upstream_registries: providerRegistries,
-      },
+      settings,
     };
   } catch (error) {
     console.error("[Admin] getProxySettingsAction error:", error);
@@ -608,77 +578,10 @@ export async function updateProxySettingsAction(
   }
 
   try {
-    const updates: Promise<void>[] = [];
-
-    if (data.module_proxy_enabled !== undefined) {
-      updates.push(
-        setSystemSetting(
-          SETTINGS_KEY.moduleProxyEnabled,
-          String(data.module_proxy_enabled),
-        ),
-      );
-    }
-
-    if (data.provider_proxy_enabled !== undefined) {
-      updates.push(
-        setSystemSetting(
-          SETTINGS_KEY.providerProxyEnabled,
-          String(data.provider_proxy_enabled),
-        ),
-      );
-    }
-
-    if (data.module_upstream_registries !== undefined) {
-      if (data.module_upstream_registries === null) {
-        updates.push(deleteSystemSetting(SETTINGS_KEY.moduleRegistries));
-      } else {
-        const normalised = data.module_upstream_registries
-          .map(normaliseRegistryUrl)
-          .filter((u): u is string => u !== null);
-        updates.push(
-          setSystemSetting(
-            SETTINGS_KEY.moduleRegistries,
-            JSON.stringify(normalised),
-          ),
-        );
-      }
-    }
-
-    if (data.provider_upstream_registries !== undefined) {
-      if (data.provider_upstream_registries === null) {
-        updates.push(deleteSystemSetting(SETTINGS_KEY.providerRegistries));
-      } else {
-        const normalised = data.provider_upstream_registries
-          .map(normaliseRegistryUrl)
-          .filter((u): u is string => u !== null);
-        updates.push(
-          setSystemSetting(
-            SETTINGS_KEY.providerRegistries,
-            JSON.stringify(normalised),
-          ),
-        );
-      }
-    }
-
-    await Promise.all(updates);
-
-    // Return updated effective configuration
-    const [moduleEnabled, providerEnabled, moduleRegs, providerRegs] =
-      await Promise.all([
-        isModuleProxyEnabled(),
-        isProviderProxyEnabled(),
-        resolveModuleRegistries(),
-        resolveProviderRegistries(),
-      ]);
-
+    const settings = await updateProxySettings(data);
     return {
       success: true,
-      settings: {
-        module_proxy_enabled: moduleEnabled,
-        provider_proxy_enabled: providerEnabled,
-        module_upstream_registries: moduleRegs,
-        provider_upstream_registries: providerRegs,
-      },
+      settings,
     };
   } catch (error) {
     console.error("[Admin] updateProxySettingsAction error:", error);

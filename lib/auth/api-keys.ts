@@ -125,39 +125,3 @@ export async function validateApiKey(key: string): Promise<ApiKey | null> {
 
   return record;
 }
-
-// ============================================================================
-// Key Creation
-// ============================================================================
-
-/**
- * Create a new API key, hash it, and store the record in the database.
- *
- * @returns The plaintext key (only returned once!) and the database record.
- */
-export async function createApiKey(params: {
-  name: string;
-  description?: string;
-  permissions?: string[];
-  expiresAt?: Date;
-  userId?: number;
-}): Promise<{ key: string; record: ApiKey }> {
-  const key = generateApiKey();
-  const hash = await hashApiKey(key);
-  const db = getDb();
-
-  const [record] = await db
-    .insert(apiKeys)
-    .values({
-      keyHash: hash,
-      name: params.name,
-      description: params.description ?? null,
-      permissions: params.permissions ?? null,
-      expiresAt: params.expiresAt ?? null,
-      userId: params.userId ?? null,
-    })
-    .returning();
-
-  // Insert always returns exactly one row on success; failure throws
-  return { key, record: record! };
-}

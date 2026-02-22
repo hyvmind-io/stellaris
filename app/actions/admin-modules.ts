@@ -331,8 +331,8 @@ export async function deleteModuleVersionAction(
   if (!isAdmin) return unauthorizedResult();
 
   try {
-    const module = await findModule(namespace, name, provider, version);
-    if (!module) {
+    const moduleRecord = await findModule(namespace, name, provider, version);
+    if (!moduleRecord) {
       return {
         success: false,
         code: "NOT_FOUND",
@@ -340,8 +340,8 @@ export async function deleteModuleVersionAction(
       };
     }
 
-    if (module.location) {
-      await deleteObject(module.location);
+    if (moduleRecord.location) {
+      await deleteObject(moduleRecord.location);
     }
 
     await conditionalModuleDelete(

@@ -61,12 +61,24 @@ describe("getSignupStatusAction", () => {
     expect(result).toBe(false);
   });
 
-  it("returns true (fail-open) on error", async () => {
+  it("returns false (fail-closed) on error with observability log", async () => {
     mockIsSignupEnabled.mockRejectedValue(new Error("DB unavailable"));
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
 
     const result = await getSignupStatusAction();
 
-    expect(result).toBe(true);
+    expect(result).toBe(false);
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "[Admin] Failed to resolve signup status; defaulting to closed",
+      expect.objectContaining({
+        action: "getSignupStatusAction",
+        failMode: "closed",
+      }),
+    );
+
+    consoleErrorSpy.mockRestore();
   });
 });
 

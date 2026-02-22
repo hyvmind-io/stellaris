@@ -977,6 +977,14 @@ describe("proxySettingsPatch", () => {
     ).toBe(false);
   });
 
+  it("rejects non-HTTPS registry URLs", () => {
+    expect(
+      proxySettingsPatch.safeParse({
+        module_upstream_registries: ["http://registry.terraform.io"],
+      }).success,
+    ).toBe(false);
+  });
+
   it("rejects non-boolean proxy enabled", () => {
     expect(
       proxySettingsPatch.safeParse({ module_proxy_enabled: "yes" }).success,

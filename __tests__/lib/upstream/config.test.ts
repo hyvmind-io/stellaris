@@ -85,7 +85,7 @@ describe("parseUpstreamRegistries", () => {
 
   it("skips invalid URLs", () => {
     const result = parseUpstreamRegistries(
-      "https://valid.example.com, not-a-url, ftp://invalid.protocol.com",
+      "https://valid.example.com, not-a-url, http://insecure.example.com, ftp://invalid.protocol.com",
     );
     expect(result).toEqual(["https://valid.example.com"]);
   });
@@ -107,10 +107,8 @@ describe("normaliseRegistryUrl", () => {
     );
   });
 
-  it("accepts valid HTTP URL (dev)", () => {
-    expect(normaliseRegistryUrl("http://localhost:3000")).toBe(
-      "http://localhost:3000",
-    );
+  it("rejects HTTP URL", () => {
+    expect(normaliseRegistryUrl("http://localhost:3000")).toBeNull();
   });
 
   it("strips trailing slashes", () => {
