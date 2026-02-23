@@ -13,10 +13,34 @@ import { Separator } from "@/components/ui/separator";
 import { StatCard } from "@/components/stat-card";
 import { SearchInput } from "@/components/search-input";
 import { CodeBlock } from "@/components/code-block";
+import { ModuleCard } from "@/components/module-card";
+import { ProviderCard } from "@/components/provider-card";
+import { browseModules } from "@/lib/data/modules";
+import { browseProviders } from "@/lib/data/providers";
 import { getRegistryStats } from "@/lib/data/stats";
 
-export default async function HomePage() {
-  const stats = await getRegistryStats();
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
+  const [stats, params] = await Promise.all([getRegistryStats(), searchParams]);
+  const q = params.q?.trim() ?? "";
+  const hasQuery = q.length > 0;
+
+  const [moduleResults, providerResults] = hasQuery
+    ? await Promise.all([
+        browseModules({ q, offset: 0, limit: 6 }),
+        browseProviders({ q, offset: 0, limit: 6 }),
+      ])
+    : [null, null];
+
+  const modulesHref = hasQuery
+    ? `/modules?q=${encodeURIComponent(q)}`
+    : "/modules";
+  const providersHref = hasQuery
+    ? `/providers?q=${encodeURIComponent(q)}`
+    : "/providers";
 
   return (
     <div className="flex flex-col">
@@ -84,18 +108,21 @@ export default async function HomePage() {
               <div className="mb-3 h-10 w-full rounded-md border border-border" />
             }
           >
-            <SearchInput placeholder="Search modules..." className="mb-3" />
+            <SearchInput
+              placeholder="Search modules and providers..."
+              className="mb-3"
+            />
           </Suspense>
           <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground">
             <span>or browse</span>
             <Link
-              href="/modules"
+              href={modulesHref}
               className="text-primary hover:underline inline-flex items-center gap-1"
             >
               Modules <ArrowRight className="h-3 w-3" />
             </Link>
             <Link
-              href="/providers"
+              href={providersHref}
               className="text-primary hover:underline inline-flex items-center gap-1"
             >
               Providers <ArrowRight className="h-3 w-3" />
@@ -103,6 +130,105 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
+
+      {hasQuery && moduleResults && providerResults && (
+        <section className="container mx-auto px-4 pb-12">
+          <div className="rounded-xl border border-border bg-card/30 p-6">
+            <h2 className="text-2xl font-bold">
+              Search results for &quot;{q}&quot;
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Found {moduleResults.meta.total + providerResults.meta.total}{" "}
+              total matches across modules and providers.
+            </p>
+
+            {moduleResults.meta.total === 0 &&
+            providerResults.meta.total === 0 ? (
+              <div className="mt-6 text-center py-8">
+                <h3 className="text-lg font-semibold mb-2">No matches found</h3>
+                <p className="text-muted-foreground mb-4">
+                  We couldn&apos;t find modules or providers matching &quot;{q}
+                  &quot;.
+                </p>
+                <div className="flex items-center justify-center gap-4 text-sm">
+                  <Link
+                    href={modulesHref}
+                    className="text-primary hover:underline inline-flex items-center gap-1"
+                  >
+                    Search modules <ArrowRight className="h-3 w-3" />
+                  </Link>
+                  <Link
+                    href={providersHref}
+                    className="text-primary hover:underline inline-flex items-center gap-1"
+                  >
+                    Search providers <ArrowRight className="h-3 w-3" />
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-8 space-y-8">
+                <div>
+                  <div className="mb-4 flex items-center justify-between gap-4">
+                    <h3 className="text-lg font-semibold inline-flex items-center gap-2">
+                      <Package className="h-5 w-5 text-primary" />
+                      Modules ({moduleResults.meta.total})
+                    </h3>
+                    <Link
+                      href={modulesHref}
+                      className="text-sm text-primary hover:underline inline-flex items-center gap-1"
+                    >
+                      View all modules <ArrowRight className="h-3 w-3" />
+                    </Link>
+                  </div>
+                  {moduleResults.modules.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {moduleResults.modules.map((mod) => (
+                        <ModuleCard
+                          key={`${mod.namespace}/${mod.name}/${mod.provider}`}
+                          module={mod}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      No modules match &quot;{q}&quot;.
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <div className="mb-4 flex items-center justify-between gap-4">
+                    <h3 className="text-lg font-semibold inline-flex items-center gap-2">
+                      <Plug className="h-5 w-5 text-primary" />
+                      Providers ({providerResults.meta.total})
+                    </h3>
+                    <Link
+                      href={providersHref}
+                      className="text-sm text-primary hover:underline inline-flex items-center gap-1"
+                    >
+                      View all providers <ArrowRight className="h-3 w-3" />
+                    </Link>
+                  </div>
+                  {providerResults.providers.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {providerResults.providers.map((prov) => (
+                        <ProviderCard
+                          key={`${prov.namespace}/${prov.type}`}
+                          provider={prov}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      No providers match &quot;{q}&quot;.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       <Separator />
 
