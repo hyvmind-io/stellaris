@@ -25,7 +25,11 @@ export type { StorageObject } from "./types";
  * Access env directly to avoid circular dep (same pattern as lib/auth/constants.ts).
  */
 function getBackend(): StorageBackend {
-  const backend = process.env.STORAGE_BACKEND ?? "r2";
+  // Cast through string: `wrangler types` narrows STORAGE_BACKEND to its
+  // literal `vars` value ("r2"), which makes the `=== "local"` and
+  // `=== "s3"` checks below unreachable per TS. Widening at the read site
+  // preserves the runtime branch logic while keeping the pinned wrangler var.
+  const backend = (process.env.STORAGE_BACKEND as string | undefined) ?? "r2";
 
   if (backend === "local") {
     // Dynamic require — only loaded when STORAGE_BACKEND=local (Node.js dev)

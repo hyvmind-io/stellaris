@@ -40,9 +40,15 @@ import { generateModuleKey, generateProviderKey } from "@/lib/storage/keys";
 
 const STORAGE_ROOT = path.join(process.cwd(), ".storage");
 
+// `wrangler types` narrows `process.env.STORAGE_BACKEND` to the literal "r2"
+// pinned in wrangler.jsonc, which would block this test from setting "local"
+// and deleting the variable. Cast through a wider record type so the
+// narrowing doesn't reach this test.
+const env = process.env as unknown as Record<string, string | undefined>;
+
 beforeEach(async () => {
   // Ensure STORAGE_BACKEND=local so index.ts picks LocalFileBackend
-  process.env.STORAGE_BACKEND = "local";
+  env.STORAGE_BACKEND = "local";
   // Start each test with a clean storage root
   await fs.rm(STORAGE_ROOT, { recursive: true, force: true });
 });
@@ -50,7 +56,7 @@ beforeEach(async () => {
 afterEach(async () => {
   // Clean up written files
   await fs.rm(STORAGE_ROOT, { recursive: true, force: true });
-  delete process.env.STORAGE_BACKEND;
+  delete env.STORAGE_BACKEND;
 });
 
 // ============================================================================

@@ -69,7 +69,6 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260218.0",
     "@tailwindcss/postcss": "^4.2.0",
     "@types/node": "^22.15.0",
     "@types/react": "^19.2.14",
@@ -85,8 +84,7 @@
     "tailwindcss": "^4.2.0",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.18",
-    "wrangler": "^4.66.0"
+    "vitest": "^4.0.18"
   },
   "engines": {
     "node": ">=20.0.0"

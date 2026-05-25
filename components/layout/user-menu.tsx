@@ -26,13 +26,22 @@ interface UserMenuProps {
     username: string;
     role: "admin" | "user" | "guest";
   };
+  /**
+   * When true, the deployment sits behind Cloudflare Access. Logging out of
+   * the app cookie alone is ineffective — the Access JWT header on the next
+   * request would immediately re-bridge a fresh session. Hide the logout
+   * items entirely; to fully sign out the user must hit
+   * `/cdn-cgi/access/logout` on the host. We do not chain that automatically
+   * to avoid surprising users with a global signout.
+   */
+  cfAccessEnabled?: boolean;
 }
 
 // ============================================================================
 // Component
 // ============================================================================
 
-export function UserMenu({ user }: UserMenuProps) {
+export function UserMenu({ user, cfAccessEnabled = false }: UserMenuProps) {
   const [isLoggingOut, startLogout] = useTransition();
   const [isLoggingOutAll, startLogoutAll] = useTransition();
 
@@ -89,33 +98,41 @@ export function UserMenu({ user }: UserMenuProps) {
           )}
         </DropdownMenuGroup>
 
-        <DropdownMenuSeparator />
+        {/*
+         * Logout actions are hidden when CF Access fronts the deployment:
+         * clearing the app cookie would be re-bridged immediately by the
+         * Access JWT on the next request, so the button would be misleading.
+         * To fully sign out the user must visit `/cdn-cgi/access/logout`.
+         */}
+        {!cfAccessEnabled && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuItem
+                disabled={isLoggingOut}
+                onSelect={(e) => {
+                  e.preventDefault();
+                  startLogout(() => logoutAction());
+                }}
+              >
+                <LogOut />
+                {isLoggingOut ? "Signing out\u2026" : "Sign out"}
+              </DropdownMenuItem>
 
-        {/* Logout actions */}
-        <DropdownMenuGroup>
-          <DropdownMenuItem
-            disabled={isLoggingOut}
-            onSelect={(e) => {
-              e.preventDefault();
-              startLogout(() => logoutAction());
-            }}
-          >
-            <LogOut />
-            {isLoggingOut ? "Signing out\u2026" : "Sign out"}
-          </DropdownMenuItem>
-
-          <DropdownMenuItem
-            disabled={isLoggingOutAll}
-            className="text-destructive focus:text-destructive"
-            onSelect={(e) => {
-              e.preventDefault();
-              startLogoutAll(() => logoutEverywhereAction());
-            }}
-          >
-            <LogOut />
-            {isLoggingOutAll ? "Signing out\u2026" : "Sign out everywhere"}
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
+              <DropdownMenuItem
+                disabled={isLoggingOutAll}
+                className="text-destructive focus:text-destructive"
+                onSelect={(e) => {
+                  e.preventDefault();
+                  startLogoutAll(() => logoutEverywhereAction());
+                }}
+              >
+                <LogOut />
+                {isLoggingOutAll ? "Signing out\u2026" : "Sign out everywhere"}
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -1,0 +1,46 @@
+# Stellaris — CI (type-check + tests).
+#
+# DISABLED: triggers are intentionally empty so this workflow does not
+# auto-run. Enable later by adding `pull_request:` / `push:` triggers
+# once the test suite is green on the Evil Corp-hosted setup.
+
+name: CI
+
+on: {}  # disabled — fill with `pull_request:` / `push:` to enable
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Type check + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Cloudflare env types
+        run: pnpm cf-typegen
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Type check
+        run: pnpm type-check
+
+      - name: Tests
+        run: pnpm test --run

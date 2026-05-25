@@ -5,9 +5,11 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { UserMenu } from "./user-menu";
 import { getAuth } from "@/lib/auth/get-auth";
+import { isCfAccessEnabled } from "@/lib/auth/cf-access-config";
 
 export async function Header() {
   const auth = await getAuth();
+  const cfAccessEnabled = isCfAccessEnabled();
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/80 backdrop-blur-sm">
@@ -36,7 +38,7 @@ export async function Header() {
         <div className="flex items-center gap-2">
           <ThemeToggle />
           {auth ? (
-            <UserMenu user={auth.user} />
+            <UserMenu user={auth.user} cfAccessEnabled={cfAccessEnabled} />
           ) : (
             <Button asChild variant="secondary" size="sm">
               <Link href="/login">Sign in</Link>

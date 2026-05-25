@@ -3,6 +3,7 @@ import "server-only";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { systemSettings } from "@/db/schema";
+import { isCfAccessEnabled } from "@/lib/auth/cf-access-config";
 
 // ============================================================================
 // Constants
@@ -35,6 +36,10 @@ export const PROVIDER_UPSTREAM_REGISTRIES_KEY = "provider_upstream_registries";
  * Defaults to true if the key is not set in the DB (safe default: open registry).
  */
 export async function isSignupEnabled(): Promise<boolean> {
+  // CF Access deployments force-disable local signup regardless of DB state:
+  // identities are provisioned via verified Access JWTs only.
+  if (isCfAccessEnabled()) return false;
+
   try {
     const db = getDb();
     const setting = await db

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import {
   Card,
   CardHeader,
@@ -9,12 +10,17 @@ import {
 } from "@/components/ui/card";
 import { SignupForm } from "@/components/auth/signup-form";
 import { isSignupEnabled } from "@/lib/data/settings";
+import { isCfAccessEnabled } from "@/lib/auth/cf-access-config";
 
 export const metadata = {
   title: "Sign Up — Stellaris",
 };
 
 export default async function SignupPage() {
+  // CF Access deployments do not expose self-serve signup at all — identities
+  // come from verified Access JWTs only.
+  if (isCfAccessEnabled()) notFound();
+
   const signupEnabled = await isSignupEnabled();
   if (!signupEnabled) {
     return (
