@@ -48,3 +48,7 @@ drizzle/meta/
 
 # Generated types
 cloudflare-env.d.ts
+next-env.d.ts
+
+# Deployment-specific (each consumer authors their own)
+wrangler.jsonc

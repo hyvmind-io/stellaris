@@ -16,6 +16,7 @@ import {
 import { getAuth } from "@/lib/auth/get-auth";
 import { loginSchema, signupSchema } from "@/lib/validation/auth";
 import { isSignupEnabled } from "@/lib/data/settings";
+import { isCfAccessEnabled } from "@/lib/auth/cf-access-config";
 
 // ============================================================================
 // Types
@@ -145,6 +146,12 @@ export async function signupAction(
   _prevState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  // CF Access deployments never permit local signup — users are provisioned
+  // through the CF Access bridge on verified JWT assertions only.
+  if (isCfAccessEnabled()) {
+    return { error: "Signups are currently disabled." };
+  }
+
   // Check if signup is enabled (DB-based toggle)
   const signupEnabled = await isSignupEnabled();
   if (!signupEnabled) {

@@ -1,0 +1,64 @@
+# Stellaris — Cloudflare Workers deploy.
+#
+# DISABLED: triggers are intentionally empty so this workflow does not
+# auto-run. Enable later by adding `push:` / `workflow_dispatch:` once
+# the deployment path is validated and the Evil Corp Cloudflare token
+# is wired as a repo/environment secret.
+#
+# Required secrets (set in repo settings → Secrets and variables → Actions):
+#   CLOUDFLARE_API_TOKEN  — token with Workers Scripts:Edit, D1:Edit,
+#                           R2:Edit, Workers Routes:Edit on Evil Corp account
+#   CLOUDFLARE_ACCOUNT_ID — <your-cloudflare-account-id>
+#
+# Org policy (Evil Corp AI trail):
+#   PRs from this workflow → label `evilcorp:ai:autonomous`
+#   PRs touching this file by humans-with-AI → `evilcorp:ai:assisted`
+
+name: Deploy
+
+on: {}  # disabled — fill with `push:` / `workflow_dispatch:` to enable
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stellaris-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Cloudflare Workers (Evil Corp)
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Cloudflare env types
+        run: pnpm cf-typegen
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Type check
+        run: pnpm type-check
+
+      - name: Test
+        run: pnpm test --run
+
+      - name: Build + deploy (OpenNext → Cloudflare)
+        run: pnpm deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
