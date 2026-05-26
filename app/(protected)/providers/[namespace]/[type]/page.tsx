@@ -7,6 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CodeBlock } from "@/components/code-block";
 import { getProviderVersions } from "@/lib/data/providers";
+import { brandPageIdentity } from "@/lib/branding";
 
 interface PageProps {
   params: Promise<{ namespace: string; type: string }>;
@@ -17,7 +18,7 @@ export async function generateMetadata({
 }: PageProps): Promise<Metadata> {
   const { namespace, type } = await params;
   return {
-    title: `${namespace}/${type} — Stellaris`,
+    title: `${namespace}/${type} — ${brandPageIdentity()}`,
     description: `Terraform provider ${namespace}/${type}`,
   };
 }

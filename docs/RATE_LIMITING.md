@@ -89,7 +89,8 @@ Mitigations:
 2. **Cloudflare Access** — restrict the bootstrap endpoint (`POST /v1/api-keys` when unauthenticated) to trusted IPs or require identity verification via Cloudflare Access policies.
 3. **Monitor** — set up Cloudflare notifications for rate limiting rule triggers to detect brute-force attempts.
 
-See the inline documentation in [`app/v1/api-keys/route.ts`](../app/v1/api-keys/route.ts) (lines 57–76) for the full rationale and implementation notes.
+See the inline documentation in `app/v1/api-keys/route.ts` (lines 57–76) of the
+repository for the full rationale and implementation notes.
 
 ## Summary
 

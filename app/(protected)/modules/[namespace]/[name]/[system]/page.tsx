@@ -18,6 +18,7 @@ import {
   getModuleVersions,
   resolveModuleTags,
 } from "@/lib/data/modules";
+import { brandPageIdentity } from "@/lib/branding";
 
 interface PageProps {
   params: Promise<{ namespace: string; name: string; system: string }>;
@@ -28,7 +29,7 @@ export async function generateMetadata({
 }: PageProps): Promise<Metadata> {
   const { namespace, name } = await params;
   return {
-    title: `${namespace}/${name} — Stellaris`,
+    title: `${namespace}/${name} — ${brandPageIdentity()}`,
     description: `Terraform module ${namespace}/${name}`,
   };
 }

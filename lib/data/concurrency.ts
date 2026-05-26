@@ -147,6 +147,83 @@ export async function conditionalModuleUpdate(
   return result[0]!;
 }
 
+/** Fields updatable when replacing a module version's bytes via admin REST. */
+export interface ModuleReplaceBytesFields {
+  location: string;
+  description?: string | null;
+  source?: string | null;
+  owner?: string;
+  tags?: string[];
+}
+
+/**
+ * Atomically replace a module version's stored bytes (R2 `location`) plus any
+ * provided metadata, only if its revision matches `expectedRevision`.
+ *
+ * On success, increments revision by 1 and updates `updatedAt`.
+ * On revision mismatch (0 rows affected), throws `RevisionConflictError`.
+ *
+ * Unlike `conditionalModuleUpdate`, this always updates `location` (the new
+ * tarball R2 key) — it is the byte-overwrite path, not a metadata-only edit.
+ *
+ * @returns The updated Module row.
+ */
+export async function conditionalModuleReplaceBytes(
+  namespace: string,
+  name: string,
+  provider: string,
+  version: string,
+  expectedRevision: number,
+  data: ModuleReplaceBytesFields,
+): Promise<Module> {
+  const db = getDb();
+
+  const setClause: Record<string, unknown> = {
+    updatedAt: new Date(),
+    revision: sql`${modules.revision} + 1`,
+    location: data.location,
+  };
+
+  if (data.description !== undefined) {
+    setClause.description = data.description;
+  }
+  if (data.source !== undefined) {
+    setClause.source = data.source;
+  }
+  if (data.owner !== undefined) {
+    setClause.owner = data.owner;
+  }
+  if (data.tags !== undefined) {
+    setClause.tags = JSON.stringify(data.tags);
+  }
+
+  const result = await db
+    .update(modules)
+    .set(setClause)
+    .where(
+      and(
+        eq(modules.namespace, namespace),
+        eq(modules.name, name),
+        eq(modules.provider, provider),
+        eq(modules.version, version),
+        eq(modules.revision, expectedRevision),
+      ),
+    )
+    .returning();
+
+  if (result.length === 0) {
+    const currentRevision = await getCurrentModuleRevision(
+      namespace,
+      name,
+      provider,
+      version,
+    );
+    throw new RevisionConflictError(expectedRevision, currentRevision);
+  }
+
+  return result[0]!;
+}
+
 /**
  * Atomically delete a module only if its revision matches `expectedRevision`.
  *

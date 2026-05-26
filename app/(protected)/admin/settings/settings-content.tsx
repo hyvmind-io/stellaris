@@ -1,6 +1,6 @@
 "use client";
 
-import { Globe, Settings, Users } from "lucide-react";
+import { Globe, Lock, Settings, Users } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -10,14 +10,21 @@ import {
 } from "@/components/ui/card";
 import { SignupToggle } from "@/components/admin/signup-toggle";
 import { ProxySettings } from "@/components/admin/proxy-settings";
+import { ImmutableUploadsToggle } from "@/components/admin/immutable-uploads-toggle";
+import { useBranding } from "@/components/branding/branding-provider";
 
 export function SettingsContent() {
+  const branding = useBranding();
+  const settingsTarget =
+    branding.whitelabelEnabled && branding.brandName
+      ? branding.brandName
+      : "Stellaris";
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight">Admin Settings</h1>
         <p className="text-muted-foreground mt-2">
-          Configure system-wide settings for Stellaris
+          Configure system-wide settings for {settingsTarget}
         </p>
       </div>
 
@@ -35,6 +42,26 @@ export function SettingsContent() {
           </CardHeader>
           <CardContent>
             <SignupToggle />
+          </CardContent>
+        </Card>
+
+        {/* Immutable Uploads */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Lock className="h-5 w-5" />
+              <CardTitle>Immutable Uploads</CardTitle>
+            </div>
+            <CardDescription>
+              Control whether published artifact bytes can be overwritten. When
+              ON, replacing existing provider platform or module version bytes
+              returns 409; initial publish to an empty slot is always allowed.
+              When OFF, re-uploading overwrites existing bytes and metadata in
+              place.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ImmutableUploadsToggle />
           </CardContent>
         </Card>
 

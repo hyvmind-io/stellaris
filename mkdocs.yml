@@ -1,0 +1,49 @@
+site_name: Stellaris
+site_description: Private Terraform/OpenTofu module and provider registry on Cloudflare Workers.
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+# Internal artifacts live under docs/ for the repo but must never be published
+# to the site. Excluding them keeps them out of both the build and the nav,
+# and silences "not in nav" warnings under --strict.
+exclude_docs: |
+  implementation/
+  reviews/
+
+nav:
+  - Home: index.md
+  - Authentication: authentication.md
+  - Publishing Guide: publishing.md
+  - API Reference: API.md
+  - Configuration: configuration.md
+  - Whitelabeling: whitelabeling.md
+  - Rate Limiting: RATE_LIMITING.md

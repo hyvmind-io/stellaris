@@ -52,3 +52,6 @@ next-env.d.ts
 
 # Deployment-specific (each consumer authors their own)
 wrangler.jsonc
+
+# MkDocs build output
+site/

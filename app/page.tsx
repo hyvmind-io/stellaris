@@ -18,6 +18,7 @@ import { ProviderCard } from "@/components/provider-card";
 import { browseModules } from "@/lib/data/modules";
 import { browseProviders } from "@/lib/data/providers";
 import { getRegistryStats } from "@/lib/data/stats";
+import { getBranding } from "@/lib/branding";
 
 export default async function HomePage({
   searchParams,
@@ -25,6 +26,10 @@ export default async function HomePage({
   searchParams: Promise<{ q?: string }>;
 }) {
   const [stats, params] = await Promise.all([getRegistryStats(), searchParams]);
+  const branding = getBranding();
+  const heroTitle = branding.whitelabelEnabled
+    ? (branding.brandName ?? branding.titleSuffix)
+    : "Stellaris";
   const q = params.q?.trim() ?? "";
   const hasQuery = q.length > 0;
 
@@ -51,10 +56,11 @@ export default async function HomePage({
           <div className="mx-auto mb-6 w-fit rounded-2xl bg-card border border-border p-4 shadow-glow">
             <Terminal className="h-12 w-12 text-primary" />
           </div>
-          <h1 className="text-5xl font-bold tracking-tight mb-4">Stellaris</h1>
+          <h1 className="text-5xl font-bold tracking-tight mb-4">
+            {heroTitle}
+          </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-8 text-balance">
-            Private Terraform/OpenTofu module and provider registry powered by
-            Cloudflare Workers
+            {branding.tagline}
           </p>
           <div className="flex items-center justify-center gap-4">
             <Button asChild size="lg">
@@ -270,16 +276,18 @@ export default async function HomePage({
       </section>
 
       {/* Tech Footer */}
-      <section className="container mx-auto px-4 pb-12">
-        <div className="flex items-center justify-center gap-3 flex-wrap">
-          <Badge variant="outline">Next.js 16</Badge>
-          <Badge variant="outline">React 19</Badge>
-          <Badge variant="outline">Cloudflare Workers</Badge>
-          <Badge variant="outline">D1</Badge>
-          <Badge variant="outline">R2</Badge>
-          <Badge variant="outline">Drizzle ORM</Badge>
-        </div>
-      </section>
+      {branding.showTechBranding && (
+        <section className="container mx-auto px-4 pb-12">
+          <div className="flex items-center justify-center gap-3 flex-wrap">
+            <Badge variant="outline">Next.js 16</Badge>
+            <Badge variant="outline">React 19</Badge>
+            <Badge variant="outline">Cloudflare Workers</Badge>
+            <Badge variant="outline">D1</Badge>
+            <Badge variant="outline">R2</Badge>
+            <Badge variant="outline">Drizzle ORM</Badge>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

@@ -980,6 +980,122 @@ Admin mutable resources expose a `revision` value. Clients must:
 | Upsert platform artifact | `PUT /v1/admin/providers/{namespace}/{type}/versions/{version}/platforms/{os}/{arch}` | `If-Match` required     |
 | Create alias             | `POST /v1/admin/providers/aliases`                                                    | Not required            |
 
+### Admin Provider Byte Ingestion (multipart)
+
+Both the create-version and platform-upsert endpoints accept **`multipart/form-data`** in addition to their existing `application/json` modes. The route branches on the `Content-Type` header. JSON mode remains the contract for externally-hosted artifacts (where each platform `location` points elsewhere); multipart mode ingests artifact bytes into R2.
+
+> **Why per-platform uploads?** Cloudflare Workers caps the request body at ~100 MB. A full provider release (≈8 platforms × ≈30 MB ≈ 240 MB) cannot be uploaded in one request. The byte path is therefore **per-platform** — one zip (≤ **64 MB**, `MAX_PROVIDER_ZIP_SIZE`) per request — via the platform `PUT`.
+
+#### Create version — `multipart/form-data` mode
+
+```
+POST /v1/admin/providers/{namespace}/{type}/versions
+```
+
+Creates the version row and uploads the version-level `SHA256SUMS` + `SHA256SUMS.sig` once. Platform zips are **not** uploaded here (size); the `platforms` list may be empty and is filled in by per-platform `PUT`s.
+
+| Field             | Type          | Required | Description                                                              |
+| ----------------- | ------------- | -------- | ------------------------------------------------------------------------ |
+| `version`         | string        | **Yes**  | Semver version                                                           |
+| `protocols`       | string (JSON) | **Yes**  | JSON array of Terraform protocol versions, e.g. `["6.0"]`                |
+| `gpg_public_keys` | string (JSON) | **Yes**  | JSON array of GPG keys (`key_id`, `ascii_armor`, `source?`, `source_url?`) |
+| `platforms`       | string (JSON) | No       | JSON array of platform metadata (defaults to `[]`)                       |
+| `SHA256SUMS`      | file          | No       | Version-level SHA256SUMS file (uploaded to R2)                           |
+| `SHA256SUMS.sig`  | file          | No       | GPG signature of `SHA256SUMS` (uploaded to R2)                           |
+
+When `SHA256SUMS`/`SHA256SUMS.sig` are provided, their R2 keys are applied to any platform entries that do not already set `shasum_url`/`shasum_signature_url`.
+
+**Error responses:** `400` malformed multipart / bad JSON in a field / non-file field where a file is expected · `409` version already exists · `422` schema validation failure · `401` unauthenticated.
+
+#### Upsert platform artifact — `multipart/form-data` mode (primary byte path)
+
+```
+PUT /v1/admin/providers/{namespace}/{type}/versions/{version}/platforms/{os}/{arch}
+```
+
+Uploads one platform zip and upserts the platform row. **`If-Match` is required** (revision-based optimistic concurrency).
+
+| Field            | Type | Required | Description                                                                |
+| ---------------- | ---- | -------- | -------------------------------------------------------------------------- |
+| `file`           | file | **Yes**  | Provider zip (≤ 64 MB). Its filename becomes the platform `filename`.      |
+| `sha256sums`     | file | No       | SHA256SUMS file. A line matching `file`'s name overrides the computed sum. |
+| `sha256sums_sig` | file | No       | GPG signature of the SHA256SUMS file.                                      |
+
+The route computes the zip's SHA-256 (overridden by a matching `sha256sums` line when present), uploads the zip (and optional sums/sig) to R2, then upserts the platform with the new `location`, `shasum`, and `filename`. The `shasum_url` / `shasum_signature_url` columns are **only** overwritten when fresh `sha256sums` / `sha256sums_sig` files are supplied in this request; otherwise the existing version-level pointers are preserved (see [GPG verification chain](#gpg-verification-chain)). On a DB failure the uploaded R2 objects are cleaned up.
+
+**Immutable Uploads gate.** Initial publish to an empty platform slot is always allowed. When the slot already holds artifact bytes (`location` set) **and** the Immutable Uploads system setting is ON (the default), the overwrite is rejected with `409` before any R2 work. With the setting OFF, the overwrite proceeds, the revision bumps, and the previous R2 object is deleted if (and only if) its key changed.
+
+**Error responses:** `400` missing/oversized `file`, oversized `Content-Length`, or malformed multipart · `409` artifact bytes already exist and Immutable Uploads is enabled · `412` `If-Match` revision mismatch · `428` missing `If-Match` · `404` provider version not found · `422` invalid path parameters · `401` unauthenticated.
+
+#### Replace module version bytes — `multipart/form-data`
+
+```
+PUT /v1/admin/modules/{namespace}/{name}/{system}/versions/{version}
+```
+
+Replaces an **existing** module version's tarball bytes (and optional metadata). This is the module analogue of the per-platform provider byte path — the CI re-push route. **`If-Match` is required.**
+
+| Field         | Type          | Required | Description                                                          |
+| ------------- | ------------- | -------- | -------------------------------------------------------------------- |
+| `module`      | file          | **Yes**  | Module tarball (≤ `MAX_MODULE_SIZE`). Matches the create POST field. |
+| `owner`       | string        | No       | Module owner                                                         |
+| `description` | string        | No       | Module description                                                   |
+| `source`      | string        | No       | Source URL                                                           |
+| `tags`        | string (JSON) | No       | JSON array of tag strings                                            |
+
+Order of operations: validate `If-Match` → confirm the version exists (`404` if not — use `POST .../versions` to create) → surface `412` on revision mismatch **before** any R2 work → check the Immutable Uploads gate. With the setting ON, the overwrite is rejected `409`. With it OFF, the new tarball is uploaded, `location`/metadata are updated, the revision bumps, and the old R2 object is deleted if its key changed. On a DB failure the just-uploaded object is cleaned up unless it overwrote the previous one in place.
+
+**Error responses:** `400` missing/oversized `module` file, oversized `Content-Length`, malformed multipart, or bad `tags` JSON · `409` Immutable Uploads enabled and version already published · `412` `If-Match` revision mismatch · `428` missing `If-Match` · `404` version not found · `422` schema validation failure · `401` unauthenticated.
+
+#### GPG verification chain
+
+Terraform/OpenTofu verifies a downloaded provider as follows, and the registry must keep every link intact across byte replaces:
+
+1. `GET /v1/providers/{ns}/{type}/{version}/download/{os}/{arch}` returns the platform `shasum`, the hardcoded `shasums_url` + `shasums_signature_url` (the version-level routes), and `signing_keys.gpg_public_keys[]`.
+2. The CLI downloads the zip and checks its SHA-256 matches `shasum` and the matching line in `SHA256SUMS`.
+3. The CLI downloads `SHA256SUMS.sig` and verifies it is a valid detached GPG signature over `SHA256SUMS` using one of the published `gpg_public_keys`.
+
+The served `shasums_url` / `shasums_signature_url` are **version-level** (`.../sha256sums`, `.../sha256sums.sig`), backed by the fixed R2 keys `providers/{ns}/{type}/{version}/SHA256SUMS[.sig]` uploaded once at create-version time. They do not depend on the per-platform `shasum_url` columns. Per-platform byte replaces therefore preserve those columns rather than null them, so the GPG chain remains valid whether a release is published in one shot or platform-by-platform.
+
+#### End-to-end publish via curl (admin API key only)
+
+```bash
+BASE=https://stellaris.example.com
+KEY=stlr_admin_key
+NS=evilcorp; TYPE=cloudflare; VER=5.19.1-beta.1
+
+# 1) Create the version (multipart) — uploads SHA256SUMS + signature, no zips yet.
+#    Capture the ETag (revision) from the response headers.
+curl -sS -D - -o /dev/null -X POST \
+  "$BASE/v1/admin/providers/$NS/$TYPE/versions" \
+  -H "Authorization: Bearer $KEY" \
+  -F "version=$VER" \
+  -F 'protocols=["5.0"]' \
+  -F 'gpg_public_keys=[{"key_id":"D3C430BB730839CA150E2DD0897EBB1F03A45650","ascii_armor":"-----BEGIN PGP PUBLIC KEY BLOCK-----\n...\n-----END PGP PUBLIC KEY BLOCK-----","source":"evilcorp"}]' \
+  -F "SHA256SUMS=@./dist/_SHA256SUMS" \
+  -F "SHA256SUMS.sig=@./dist/_SHA256SUMS.sig"
+# → 201, header: ETag: W/"1"
+
+# Alternatively create-version via JSON (externally-hosted artifacts):
+#   -H 'Content-Type: application/json' -d '{ "version": "...", "protocols": [...], "platforms": [...], "gpg_public_keys": [...] }'
+
+# 2) Upload each platform zip with the current revision via If-Match.
+#    Re-read the ETag after each PUT (revision bumps each time).
+curl -sS -D - -o /dev/null -X PUT \
+  "$BASE/v1/admin/providers/$NS/$TYPE/versions/$VER/platforms/linux/amd64" \
+  -H "Authorization: Bearer $KEY" \
+  -H 'If-Match: W/"1"' \
+  -F "file=@./dist/terraform-provider-${TYPE}_${VER}_linux_amd64.zip"
+# → 200, header: ETag: W/"2"
+
+curl -sS -D - -o /dev/null -X PUT \
+  "$BASE/v1/admin/providers/$NS/$TYPE/versions/$VER/platforms/darwin/arm64" \
+  -H "Authorization: Bearer $KEY" \
+  -H 'If-Match: W/"2"' \
+  -F "file=@./dist/terraform-provider-${TYPE}_${VER}_darwin_arm64.zip"
+# → 200, header: ETag: W/"3"  (repeat for remaining platforms)
+```
+
 ### Alias Behavior
 
 - Rename behavior is implemented through alias creation endpoints only.

@@ -8,10 +8,12 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { LoginForm } from "@/components/auth/login-form";
+import type { Metadata } from "next";
+import { brandPageIdentity } from "@/lib/branding";
 
-export const metadata = {
-  title: "Sign In — Stellaris",
-};
+export function generateMetadata(): Metadata {
+  return { title: `Sign In — ${brandPageIdentity()}` };
+}
 
 export default function LoginPage() {
   return (

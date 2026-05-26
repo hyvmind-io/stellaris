@@ -74,6 +74,25 @@ export const adminModuleCreateBody = z
 
 export type AdminModuleCreateBody = z.infer<typeof adminModuleCreateBody>;
 
+/**
+ * Metadata fields for replacing a module version's bytes via the admin REST
+ * `PUT .../versions/:version` path (multipart byte-overwrite).
+ *
+ * The version is taken from the URL path, not the body. All metadata fields
+ * are optional; omitted fields are left unchanged. Used after multipart
+ * form-data extraction.
+ */
+export const adminModuleReplaceBody = z
+  .object({
+    owner: z.string().max(100).optional(),
+    description: z.string().max(2000).nullable().optional(),
+    source: z.string().max(500).nullable().optional(),
+    tags: z.array(providerSchema).max(20, "Maximum 20 tags allowed").optional(),
+  })
+  .strict({ message: "Unknown fields are not allowed" });
+
+export type AdminModuleReplaceBody = z.infer<typeof adminModuleReplaceBody>;
+
 // ============================================================================
 // Provider Admin Schemas
 // ============================================================================
@@ -146,6 +165,71 @@ export const adminProviderCreateBody = z
   .strict({ message: "Unknown fields are not allowed" });
 
 export type AdminProviderCreateBody = z.infer<typeof adminProviderCreateBody>;
+
+/**
+ * Provider create via `multipart/form-data` (admin REST byte-ingestion path).
+ *
+ * Unlike the JSON body, the multipart create-version mode uploads the
+ * version-level `SHA256SUMS` + `SHA256SUMS.sig` files directly and does NOT
+ * require platform zips (Cloudflare Workers ~100 MB body limit makes a full
+ * multi-platform bundle impossible — platform bytes arrive via per-platform
+ * PUTs). Platform metadata is therefore optional here.
+ *
+ * Field values are parsed from `FormData`:
+ *   - `version`         → string
+ *   - `protocols`       → JSON string array (pre-parsed by the route)
+ *   - `platforms`       → optional JSON string array (pre-parsed by the route)
+ *   - `gpg_public_keys` → JSON string array (pre-parsed by the route)
+ */
+export const adminProviderCreateMultipartBody = z
+  .object({
+    version: versionSchema,
+    protocols: z.array(z.string().min(1)).min(1),
+    platforms: z
+      .array(
+        z
+          .object({
+            os: osSchema,
+            arch: archSchema,
+            filename: z
+              .string()
+              .min(1)
+              .max(255)
+              .regex(
+                /^[a-zA-Z0-9._-]+$/,
+                "Invalid filename — only alphanumeric characters, dots, hyphens, and underscores are allowed",
+              ),
+            shasum: z
+              .string()
+              .regex(
+                /^[a-f0-9]{64}$/i,
+                "Invalid SHA-256 hash — must be 64 hex characters",
+              ),
+            location: z.string().min(1).optional(),
+            shasum_url: z.string().url().optional(),
+            shasum_signature_url: z.string().url().optional(),
+          })
+          .strict({ message: "Unknown fields are not allowed" }),
+      )
+      .default([]),
+    gpg_public_keys: z
+      .array(
+        z
+          .object({
+            key_id: z.string().min(1),
+            ascii_armor: z.string().min(1),
+            source: z.string().default(""),
+            source_url: z.string().url().nullish(),
+          })
+          .strict({ message: "Unknown fields are not allowed" }),
+      )
+      .min(1),
+  })
+  .strict({ message: "Unknown fields are not allowed" });
+
+export type AdminProviderCreateMultipartBody = z.infer<
+  typeof adminProviderCreateMultipartBody
+>;
 
 /**
  * PUT body for replacing a provider platform artifact via admin API.

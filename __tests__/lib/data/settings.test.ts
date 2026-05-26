@@ -29,6 +29,8 @@ vi.mock("drizzle-orm", () => ({
 
 import {
   isSignupEnabled,
+  isImmutableUploadsEnabled,
+  setImmutableUploads,
   isModuleUpstreamProxyEnabled,
   isProviderUpstreamProxyEnabled,
   getModuleUpstreamRegistries,
@@ -38,6 +40,7 @@ import {
   setModuleUpstreamRegistries,
   setProviderUpstreamRegistries,
   SIGNUP_ENABLED_KEY,
+  IMMUTABLE_UPLOADS_KEY,
   MODULE_UPSTREAM_PROXY_ENABLED_KEY,
   PROVIDER_UPSTREAM_PROXY_ENABLED_KEY,
   MODULE_UPSTREAM_REGISTRIES_KEY,
@@ -126,12 +129,97 @@ describe("isSignupEnabled", () => {
 });
 
 // ============================================================================
+// isImmutableUploadsEnabled
+// ============================================================================
+
+describe("isImmutableUploadsEnabled", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGet.mockReset();
+    setupSelectChain();
+  });
+
+  it("returns true when no DB record exists (default immutable)", async () => {
+    mockGet.mockResolvedValue(undefined);
+
+    const result = await isImmutableUploadsEnabled();
+
+    expect(result).toBe(true);
+  });
+
+  it("returns true when value is 'true'", async () => {
+    mockGet.mockResolvedValue({ key: IMMUTABLE_UPLOADS_KEY, value: "true" });
+
+    const result = await isImmutableUploadsEnabled();
+
+    expect(result).toBe(true);
+  });
+
+  it("returns false when value is 'false'", async () => {
+    mockGet.mockResolvedValue({ key: IMMUTABLE_UPLOADS_KEY, value: "false" });
+
+    const result = await isImmutableUploadsEnabled();
+
+    expect(result).toBe(false);
+  });
+
+  it("fails closed (returns true) on DB error with observability log", async () => {
+    mockGet.mockRejectedValue(new Error("D1_ERROR: connection timeout"));
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+
+    const result = await isImmutableUploadsEnabled();
+
+    expect(result).toBe(true);
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "[Settings] Failed to read immutable uploads status; defaulting to immutable",
+      expect.objectContaining({
+        key: IMMUTABLE_UPLOADS_KEY,
+        failMode: "immutable",
+      }),
+    );
+
+    consoleErrorSpy.mockRestore();
+  });
+});
+
+// ============================================================================
+// setImmutableUploads
+// ============================================================================
+
+describe("setImmutableUploads", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupInsertChain();
+  });
+
+  it("persists 'true' via upsert when enabling", async () => {
+    await setImmutableUploads(true);
+
+    expect(mockInsert).toHaveBeenCalled();
+    expect(mockOnConflictDoUpdate).toHaveBeenCalled();
+  });
+
+  it("persists 'false' via upsert when disabling", async () => {
+    await setImmutableUploads(false);
+
+    expect(mockInsert).toHaveBeenCalled();
+    expect(mockOnConflictDoUpdate).toHaveBeenCalled();
+  });
+});
+
+// ============================================================================
 // Setting Key Constants
 // ============================================================================
 
 describe("Setting key constants", () => {
   it("SIGNUP_ENABLED_KEY is 'signup_enabled'", () => {
     expect(SIGNUP_ENABLED_KEY).toBe("signup_enabled");
+  });
+
+  it("IMMUTABLE_UPLOADS_KEY is 'immutable_uploads'", () => {
+    expect(IMMUTABLE_UPLOADS_KEY).toBe("immutable_uploads");
   });
 
   it("MODULE_UPSTREAM_PROXY_ENABLED_KEY is correct", () => {

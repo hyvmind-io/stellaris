@@ -5,11 +5,18 @@ import { SearchInput } from "@/components/search-input";
 import { Pagination } from "@/components/pagination";
 import { ModuleCard } from "@/components/module-card";
 import { browseModules } from "@/lib/data/modules";
+import type { Metadata } from "next";
+import { getBranding, brandPageIdentity } from "@/lib/branding";
 
-export const metadata = {
-  title: "Modules — Stellaris",
-  description: "Browse Terraform modules in the Stellaris registry",
-};
+export function generateMetadata(): Metadata {
+  const branding = getBranding();
+  return {
+    title: `Modules — ${brandPageIdentity()}`,
+    description: branding.whitelabelEnabled
+      ? "Browse modules in the registry"
+      : "Browse Terraform modules in the Stellaris registry",
+  };
+}
 
 export default async function ModulesPage({
   searchParams,

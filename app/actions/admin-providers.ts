@@ -29,6 +29,7 @@ import {
   uploadShasumsSignature,
   deleteByPrefix,
 } from "@/lib/storage";
+import { extractShasumForFile, sha256Hex } from "@/lib/storage/shasum";
 import { createProviderAliasBody } from "@/lib/validation/admin";
 import type {
   AdminActionResult,
@@ -74,16 +75,6 @@ function parseProtocols(protocols: string): string[] {
     .split(",")
     .map((part) => part.trim())
     .filter(Boolean);
-}
-
-async function sha256Hex(file: File): Promise<string> {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    await file.arrayBuffer(),
-  );
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
 }
 
 export async function listAdminProvidersAction(params: {
@@ -270,16 +261,9 @@ export async function createProviderAction(
     let shasum = await sha256Hex(data.artifact);
     if (data.shasumFile) {
       const shasumText = await data.shasumFile.text();
-      const parsed = shasumText
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .find((line) => line.includes(data.artifact!.name));
-      if (parsed) {
-        const [fromFile] = parsed.split(/\s+\*?/);
-        if (fromFile && /^[a-f0-9]{64}$/i.test(fromFile)) {
-          shasum = fromFile.toLowerCase();
-        }
+      const fromFile = extractShasumForFile(shasumText, data.artifact.name);
+      if (fromFile) {
+        shasum = fromFile;
       }
     }
 

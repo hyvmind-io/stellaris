@@ -38,10 +38,15 @@ describe("workflow regressions (REV-001/REV-002)", () => {
       "utf8",
     );
 
-    expect(types).toContain(
-      "interface CloudflareEnv extends Cloudflare.Env {}",
-    );
-    expect(types).toContain("DB: D1Database;");
-    expect(types).toContain("MODULES_STORAGE: R2Bucket;");
+    // Assert the bindings exist, not the exact wrapper interface. `wrangler
+    // types` changes the CloudflareEnv declaration shape depending on the
+    // wrangler.jsonc vars present (e.g. it may extend a generated
+    // `__BaseEnv_CloudflareEnv` rather than `Cloudflare.Env`). Pinning that
+    // wrapper text made this test break on unrelated var additions. The
+    // regression we actually guard against is the DB + storage bindings
+    // disappearing from the generated types.
+    expect(types).toMatch(/interface\s+CloudflareEnv\b/);
+    expect(types).toMatch(/\bDB:\s*D1Database;/);
+    expect(types).toMatch(/\bMODULES_STORAGE:\s*R2Bucket;/);
   });
 });
