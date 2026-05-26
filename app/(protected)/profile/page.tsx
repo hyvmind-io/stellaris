@@ -3,6 +3,7 @@ import { getUserApiKeys } from "@/lib/data/api-keys";
 import { Separator } from "@/components/ui/separator";
 import { AccountSettings } from "@/components/profile/account-settings";
 import { PasswordChange } from "@/components/profile/password-change";
+import { ThemePreference } from "@/components/profile/theme-preference";
 import { ApiKeys } from "@/components/profile/api-keys";
 
 export default async function ProfilePage() {
@@ -27,6 +28,10 @@ export default async function ProfilePage() {
         <Separator />
 
         <PasswordChange />
+
+        <Separator />
+
+        <ThemePreference />
 
         <Separator />
 

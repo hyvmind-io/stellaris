@@ -1,8 +1,7 @@
 import type { NextRequest } from "next/server";
-import { count, eq } from "drizzle-orm";
+import { count, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { apiKeys } from "@/db/schema";
-import type { ApiKey } from "@/db/schema";
 import { generateApiKey, hashApiKey } from "@/lib/auth/api-keys";
 import { requireAuth } from "@/lib/auth/middleware";
 import {
@@ -122,84 +121,114 @@ export async function POST(request: NextRequest) {
     const { name, description, permissions, expires_at } = parsed.data;
     const expiresAt = expires_at ? new Date(expires_at) : undefined;
 
-    // Generate new key outside transaction (crypto only)
+    // Generate new key (crypto only)
     const newKey = generateApiKey();
     const newKeyHash = await hashApiKey(newKey);
 
-    // Atomic transaction: COUNT → auth check → INSERT
-    // Prevents bootstrap race condition (SEC-004) where two simultaneous
-    // requests to an empty registry both see count === 0 and both create
-    // keys without authentication.
-    type TxResult =
-      | { ok: true; record: ApiKey }
-      | { ok: false; status: "unauthorized" | "forbidden" };
+    // Cloudflare D1 forbids interactive SQL transactions, so the original
+    // COUNT → auth → INSERT transaction is reimplemented with D1-native atomic
+    // primitives while PRESERVING the SEC-004 bootstrap-race guarantee.
+    //
+    // Authorization branching (unauthorized vs forbidden vs allowed) is decided
+    // from non-atomic reads — these only choose which error to return and never
+    // grant access on their own. The actual write is a SINGLE atomic conditional
+    // INSERT (`INSERT ... SELECT ... WHERE <guard>`). The guard re-evaluates the
+    // authority condition at write time inside one statement:
+    //
+    //   - Bootstrap path: WHERE (SELECT COUNT(*) FROM api_keys) = 0
+    //   - Admin path:     WHERE EXISTS (valid, non-expired admin key = tokenHash)
+    //
+    // Because the bootstrap guard is part of the same atomic INSERT, two
+    // concurrent empty-registry requests cannot both insert: only the first sees
+    // COUNT(*) = 0; the second's guard fails and inserts 0 rows (SEC-004 holds).
+    const now = new Date();
 
-    const txResult = await db.transaction(async (tx): Promise<TxResult> => {
-      const countResult = await tx.select({ total: count() }).from(apiKeys);
-      const total = countResult[0]?.total ?? 0;
+    // Read current authorization state — used ONLY to select the right rejection
+    // status, not to authorize the write (the SQL guard below authorizes it).
+    const countResult = await db.select({ total: count() }).from(apiKeys);
+    const total = countResult[0]?.total ?? 0;
 
-      if (total > 0) {
-        // Non-bootstrap: require admin auth inline (cannot use requireAuth
-        // because it queries the DB outside this transaction context)
-        if (!tokenHash) {
-          return { ok: false, status: "unauthorized" };
-        }
-
-        // NOTE: This uses a direct DB equality check rather than the timingSafeEqual
-        // defense-in-depth layer from validateApiKey(). We cannot call validateApiKey
-        // here because it queries the DB outside this transaction context. Risk is
-        // minimal: both values are SHA-256 hashes (not raw keys), and the DB index
-        // comparison on 64-char hex strings has negligible timing leakage.
-        // lastUsedAt is not updated here to keep the transaction minimal.
-        const existing = await tx
-          .select()
-          .from(apiKeys)
-          .where(eq(apiKeys.keyHash, tokenHash))
-          .get();
-
-        if (
-          !existing ||
-          (existing.expiresAt && existing.expiresAt < new Date())
-        ) {
-          return { ok: false, status: "unauthorized" };
-        }
-
-        const perms = existing.permissions ?? [];
-        if (!perms.includes("admin")) {
-          return { ok: false, status: "forbidden" };
-        }
+    if (total > 0) {
+      // Non-bootstrap: a valid admin key is required.
+      if (!tokenHash) {
+        return unauthorized("Invalid or expired API key");
       }
+      const existing = await db
+        .select()
+        .from(apiKeys)
+        .where(eq(apiKeys.keyHash, tokenHash))
+        .get();
 
-      // Bootstrap (total === 0) or authenticated admin — create key
-      const [record] = await tx
-        .insert(apiKeys)
-        .values({
-          keyHash: newKeyHash,
-          name: name.trim(),
-          description: description ?? null,
-          permissions: permissions ?? null,
-          expiresAt: expiresAt ?? null,
-        })
-        .returning();
+      if (!existing || (existing.expiresAt && existing.expiresAt < now)) {
+        return unauthorized("Invalid or expired API key");
+      }
+      const perms = existing.permissions ?? [];
+      if (!perms.includes("admin")) {
+        return forbidden("Admin permission required to create API keys");
+      }
+    }
 
-      return { ok: true, record: record! };
-    });
+    // Atomic guarded INSERT — a single FROM-less `INSERT INTO api_keys SELECT
+    // <constants> WHERE <guard>`. A FROM-less SELECT yields exactly one candidate
+    // row, gated by the WHERE: it inserts that row only when the write-time
+    // authority guard holds, otherwise it inserts 0 rows. The whole statement is
+    // atomic, so it both authorizes and writes in one step:
+    //   - bootstrap: NOT EXISTS (any api_keys row)  ← closes the SEC-004 race
+    //   - admin:     EXISTS (valid, non-expired admin key matching tokenHash)
+    // SQLite has no boolean type; permissions is a JSON-encoded string array, so
+    // `permissions LIKE '%"admin"%'` matches an array that contains "admin".
+    const nowEpoch = Math.floor(now.getTime() / 1000);
+    const expiresEpoch = expiresAt ? Math.floor(expiresAt.getTime() / 1000) : null;
+    const permsJson = permissions ? JSON.stringify(permissions) : null;
 
-    if (!txResult.ok) {
-      return txResult.status === "forbidden"
-        ? forbidden("Admin permission required to create API keys")
-        : unauthorized("Invalid or expired API key");
+    const adminClause = tokenHash
+      ? sql` OR EXISTS (
+          SELECT 1 FROM ${apiKeys}
+          WHERE ${apiKeys.keyHash} = ${tokenHash}
+            AND (${apiKeys.expiresAt} IS NULL OR ${apiKeys.expiresAt} > ${nowEpoch})
+            AND ${apiKeys.permissions} LIKE '%"admin"%'
+        )`
+      : sql``;
+
+    // The SELECT columns must match the api_keys column order exactly (drizzle's
+    // insert-select contract). Columns: id, key_hash, name, description,
+    // permissions, created_at, last_used_at, expires_at, user_id. `id` is left
+    // NULL so SQLite assigns the autoincrement value.
+    const insertSelect = sql`
+      SELECT
+        NULL AS id,
+        ${newKeyHash} AS key_hash,
+        ${name.trim()} AS name,
+        ${description ?? null} AS description,
+        ${permsJson} AS permissions,
+        ${nowEpoch} AS created_at,
+        NULL AS last_used_at,
+        ${expiresEpoch} AS expires_at,
+        NULL AS user_id
+      WHERE (NOT EXISTS (SELECT 1 FROM ${apiKeys}))${adminClause}
+    `;
+
+    const inserted = await db.insert(apiKeys).select(insertSelect).returning();
+
+    const record = inserted[0];
+
+    if (!record) {
+      // Guard failed at write time despite the pre-read authority check: another
+      // concurrent request won the bootstrap race, or auth was insufficient.
+      return total > 0
+        ? unauthorized("Invalid or expired API key")
+        : unauthorized("Bootstrap unavailable — registry already initialized");
     }
 
     return jsonResponse(
       {
         key: newKey, // Plaintext key — only returned on creation!
-        id: txResult.record.id,
-        name: txResult.record.name,
-        description: txResult.record.description,
-        permissions: txResult.record.permissions,
-        created_at: txResult.record.createdAt.toISOString(),
-        expires_at: txResult.record.expiresAt?.toISOString() ?? null,
+        id: record.id,
+        name: record.name,
+        description: record.description,
+        permissions: record.permissions,
+        created_at: record.createdAt.toISOString(),
+        expires_at: record.expiresAt?.toISOString() ?? null,
       },
       201,
     );

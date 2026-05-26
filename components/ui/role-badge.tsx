@@ -7,21 +7,22 @@ interface RoleBadgeProps {
   className?: string;
 }
 
+// Low-opacity single-hue overlays so the badge stays legible on ANY active
+// theme/mode without relying on the `dark:` variant (matches the permission
+// badge approach in lib/permissions.ts CATEGORY_COLORS). `guest` uses theme
+// tokens so it tracks the active palette.
 const ROLE_CONFIG: Record<UserRole, { label: string; className: string }> = {
   admin: {
     label: "Admin",
-    className:
-      "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border-amber-300 dark:border-amber-800",
+    className: "bg-amber-500/15 text-amber-500 border-amber-500/25",
   },
   user: {
     label: "User",
-    className:
-      "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-300 dark:border-blue-800",
+    className: "bg-blue-500/15 text-blue-500 border-blue-500/25",
   },
   guest: {
     label: "Guest",
-    className:
-      "bg-gray-100 text-gray-600 dark:bg-gray-800/50 dark:text-gray-400 border-gray-300 dark:border-gray-600",
+    className: "bg-muted text-muted-foreground border-border",
   },
 };
 

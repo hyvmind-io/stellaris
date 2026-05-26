@@ -17,6 +17,12 @@ export const SIGNUP_ENABLED_KEY = "signup_enabled";
 // the safe default for a registry serving signed artifacts).
 export const IMMUTABLE_UPLOADS_KEY = "immutable_uploads";
 
+// Custom theming (PRD-02). `default_theme` is the deployment-wide default theme
+// name (a manifest theme; "default" is the built-in Dracula/Alucard fallback).
+// `allow_user_theme_override` gates per-user theme selection (default "true").
+export const DEFAULT_THEME_KEY = "default_theme";
+export const ALLOW_USER_THEME_OVERRIDE_KEY = "allow_user_theme_override";
+
 // Upstream proxy — controls whether the registry proxies requests to upstream
 // registries when a module/provider is not found locally.
 /** @deprecated Prefer SETTINGS_KEY.moduleProxyEnabled in lib/upstream/config.ts. */
@@ -132,6 +138,102 @@ export async function setImmutableUploads(enabled: boolean): Promise<void> {
     .onConflictDoUpdate({
       target: systemSettings.key,
       set: { value: enabled.toString(), updatedAt: new Date() },
+    });
+}
+
+// ============================================================================
+// Theming Settings (PRD-02)
+// ============================================================================
+
+/**
+ * Get the deployment-wide default theme name.
+ *
+ * Returns "default" (the built-in Dracula/Alucard scheme) when the key is unset
+ * or on DB/read error — a safe fallback that always exists in the manifest.
+ */
+export async function getDefaultTheme(): Promise<string> {
+  try {
+    const db = getDb();
+    const setting = await db
+      .select()
+      .from(systemSettings)
+      .where(eq(systemSettings.key, DEFAULT_THEME_KEY))
+      .get();
+
+    return setting?.value ?? "default";
+  } catch (error) {
+    console.error(
+      "[Settings] Failed to read default theme; falling back to built-in default",
+      {
+        key: DEFAULT_THEME_KEY,
+        failMode: "default",
+        error,
+      },
+    );
+    return "default";
+  }
+}
+
+/**
+ * Set the deployment-wide default theme name. Callers should validate the value
+ * against the compiled manifest before persisting (the server action does so).
+ */
+export async function setDefaultTheme(theme: string): Promise<void> {
+  const db = getDb();
+  await db
+    .insert(systemSettings)
+    .values({ key: DEFAULT_THEME_KEY, value: theme })
+    .onConflictDoUpdate({
+      target: systemSettings.key,
+      set: { value: theme, updatedAt: new Date() },
+    });
+}
+
+/**
+ * Check whether per-user theme override is allowed.
+ *
+ * Defaults to true when the key is unset (open: users may pick a theme). Fails
+ * OPEN (true) on read error to match the documented default; the resolver still
+ * validates any chosen theme against the manifest before applying it.
+ */
+export async function isThemeOverrideAllowed(): Promise<boolean> {
+  try {
+    const db = getDb();
+    const setting = await db
+      .select()
+      .from(systemSettings)
+      .where(eq(systemSettings.key, ALLOW_USER_THEME_OVERRIDE_KEY))
+      .get();
+
+    if (!setting) return true; // default: override allowed
+    return setting.value === "true";
+  } catch (error) {
+    console.error(
+      "[Settings] Failed to read theme override setting; defaulting to allowed",
+      {
+        key: ALLOW_USER_THEME_OVERRIDE_KEY,
+        failMode: "allowed",
+        error,
+      },
+    );
+    return true;
+  }
+}
+
+/**
+ * Enable or disable per-user theme override.
+ */
+export async function setThemeOverrideAllowed(allowed: boolean): Promise<void> {
+  const db = getDb();
+  await db
+    .insert(systemSettings)
+    .values({
+      key: ALLOW_USER_THEME_OVERRIDE_KEY,
+      value: allowed.toString(),
+    })
+    .onConflictDoUpdate({
+      target: systemSettings.key,
+      set: { value: allowed.toString(), updatedAt: new Date() },
     });
 }
 

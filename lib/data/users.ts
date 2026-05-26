@@ -285,6 +285,27 @@ export async function updateUserRole(
 }
 
 /**
+ * Update a user's theme preference (PRD-02).
+ *
+ * @param id - User ID
+ * @param theme - A manifest theme name, or null to follow the system default.
+ * @returns Updated user data without password hash.
+ */
+export async function setUserTheme(
+  id: number,
+  theme: string | null,
+): Promise<AuthUser> {
+  const db = getDb();
+  const [user] = await db
+    .update(users)
+    .set({ theme, updatedAt: new Date() })
+    .where(eq(users.id, id))
+    .returning();
+
+  return toAuthUser(user!);
+}
+
+/**
  * Update a user's password.
  *
  * @param id - User ID

@@ -207,6 +207,12 @@ export const users = sqliteTable(
       .notNull()
       .$defaultFn(() => new Date()),
     lastLoginAt: integer("last_login_at", { mode: "timestamp" }),
+    /**
+     * Per-user theme preference (PRD-02). Null = follow the system default
+     * theme; otherwise a compiled theme name from the manifest. Mirrored to a
+     * cookie for flash-free SSR. Ignored when `allow_user_theme_override` is off.
+     */
+    theme: text("theme"),
   },
   (table) => [
     uniqueIndex("users_email_unique_idx").on(table.email),

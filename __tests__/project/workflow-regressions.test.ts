@@ -10,7 +10,10 @@ describe("workflow regressions (REV-001/REV-002)", () => {
     );
     expect(packageJson.scripts["cf-typegen"]).toContain("cloudflare-env.d.ts");
     expect(packageJson.scripts["pretype-check"]).toBe("pnpm cf-typegen");
-    expect(packageJson.scripts.prebuild).toBe("pnpm cf-typegen");
+    // prebuild must keep cf-typegen wired in (REV-001/REV-002); the theme
+    // compiler (PRD-02) is chained after it, so assert containment not equality.
+    expect(packageJson.scripts.prebuild).toContain("pnpm cf-typegen");
+    expect(packageJson.scripts.prebuild).toContain("pnpm compile-themes");
   });
 
   it("keeps lint script on ESLint CLI (Next.js 16 compatible)", () => {

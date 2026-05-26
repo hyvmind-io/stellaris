@@ -43,6 +43,9 @@ coverage/
 .DS_Store
 Thumbs.db
 
+# WIP
+.wip
+
 # Drizzle (meta is auto-generated, migrations are committed)
 drizzle/meta/
 
@@ -50,8 +53,14 @@ drizzle/meta/
 cloudflare-env.d.ts
 next-env.d.ts
 
+# TypeScript incremental build cache
+tsconfig.tsbuildinfo
+
 # Deployment-specific (each consumer authors their own)
 wrangler.jsonc
 
 # MkDocs build output
 site/
+
+# Generated theme artifacts (compiled at prebuild from themes/*.{yaml,jsonc})
+app/generated/

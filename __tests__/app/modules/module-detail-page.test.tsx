@@ -249,8 +249,9 @@ describe("ModuleDetailPage", () => {
 
       const html = await renderPage(makeParams());
 
-      // The code block should still include the full path with system
-      expect(html).toContain("stellaris.example.com/hashicorp/consul/aws");
+      // The code block should still include the full path with system, hosted
+      // at the registry host derived from NEXT_PUBLIC_APP_URL (test default).
+      expect(html).toContain("localhost:3000/hashicorp/consul/aws");
     });
   });
 

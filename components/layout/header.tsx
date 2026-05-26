@@ -47,6 +47,8 @@ export async function Header() {
 
         {/* Actions */}
         <div className="flex items-center gap-2">
+          {/* Light/dark toggle stays in the nav for everyone. Theme SELECTION
+              (choosing among compiled themes) lives in the user Profile page. */}
           <ThemeToggle />
           {auth ? (
             <UserMenu user={auth.user} cfAccessEnabled={cfAccessEnabled} />

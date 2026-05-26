@@ -1,6 +1,6 @@
 "use client";
 
-import { Globe, Lock, Settings, Users } from "lucide-react";
+import { Globe, Lock, Palette, Settings, Users } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -11,6 +11,7 @@ import {
 import { SignupToggle } from "@/components/admin/signup-toggle";
 import { ProxySettings } from "@/components/admin/proxy-settings";
 import { ImmutableUploadsToggle } from "@/components/admin/immutable-uploads-toggle";
+import { ThemeSettings } from "@/components/admin/theme-settings";
 import { useBranding } from "@/components/branding/branding-provider";
 
 export function SettingsContent() {
@@ -62,6 +63,24 @@ export function SettingsContent() {
           </CardHeader>
           <CardContent>
             <ImmutableUploadsToggle />
+          </CardContent>
+        </Card>
+
+        {/* Theming */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Palette className="h-5 w-5" />
+              <CardTitle>Theming</CardTitle>
+            </div>
+            <CardDescription>
+              Choose the deployment-wide default theme and control whether users
+              may pick their own. Themes are compiled from <code>themes/</code>{" "}
+              at build time; the built-in default is always available.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ThemeSettings />
           </CardContent>
         </Card>
 

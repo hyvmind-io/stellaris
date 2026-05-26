@@ -19,6 +19,7 @@ import { browseModules } from "@/lib/data/modules";
 import { browseProviders } from "@/lib/data/providers";
 import { getRegistryStats } from "@/lib/data/stats";
 import { getBranding } from "@/lib/branding";
+import { getRegistryHost } from "@/lib/registry-host";
 
 export default async function HomePage({
   searchParams,
@@ -250,7 +251,7 @@ export default async function HomePage({
             <CodeBlock
               language="hcl"
               code={`module "example" {
-  source  = "stellaris.example.com/namespace/name/provider"
+  source  = "${getRegistryHost()}/namespace/name/provider"
   version = "1.0.0"
 }`}
             />
@@ -265,7 +266,7 @@ export default async function HomePage({
               code={`terraform {
   required_providers {
     example = {
-      source  = "stellaris.example.com/namespace/type"
+      source  = "${getRegistryHost()}/namespace/type"
       version = "~> 1.0"
     }
   }
