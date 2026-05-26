@@ -4,7 +4,12 @@ import { count, eq } from "drizzle-orm";
 import { getAuth } from "@/lib/auth/get-auth";
 import { getDb } from "@/db/client";
 import { apiKeys, sessions } from "@/db/schema";
-import { isSignupEnabled, setSignupEnabled } from "@/lib/data/settings";
+import {
+  isSignupEnabled,
+  setSignupEnabled,
+  isImmutableUploadsEnabled,
+  setImmutableUploads,
+} from "@/lib/data/settings";
 import {
   getProxySettingsSnapshot,
   updateProxySettings,
@@ -33,6 +38,12 @@ import type { AuthUser, AuthUserWithCounts, UserRole } from "@/types/auth";
 // ============================================================================
 
 export interface ToggleSignupResult {
+  success: boolean;
+  enabled?: boolean;
+  error?: string;
+}
+
+export interface ToggleImmutableUploadsResult {
   success: boolean;
   enabled?: boolean;
   error?: string;
@@ -159,6 +170,57 @@ export async function toggleSignupAction(
         error instanceof Error
           ? error.message
           : "Failed to update signup setting",
+    };
+  }
+}
+
+// ============================================================================
+// Immutable Uploads Toggle Actions
+// ============================================================================
+
+/**
+ * Get the current immutable-uploads enabled/disabled state.
+ * Does NOT require admin — safe to call from any server context.
+ * Fails closed (returns true) on error: immutability is the safe default.
+ */
+export async function getImmutableUploadsStatusAction(): Promise<boolean> {
+  try {
+    return await isImmutableUploadsEnabled();
+  } catch (error) {
+    console.error(
+      "[Admin] Failed to resolve immutable uploads status; defaulting to immutable",
+      {
+        action: "getImmutableUploadsStatusAction",
+        failMode: "immutable",
+        error,
+      },
+    );
+    return true; // fail-closed
+  }
+}
+
+/**
+ * Toggle immutable uploads on or off. Requires admin role.
+ */
+export async function toggleImmutableUploadsAction(
+  enabled: boolean,
+): Promise<ToggleImmutableUploadsResult> {
+  const check = await requireAdmin();
+  if (!check.ok) {
+    return { success: false, error: check.error };
+  }
+
+  try {
+    await setImmutableUploads(enabled);
+    return { success: true, enabled };
+  } catch (error) {
+    console.error("[Admin] toggleImmutableUploadsAction error:", error);
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to update immutable uploads setting",
     };
   }
 }

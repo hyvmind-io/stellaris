@@ -5,11 +5,18 @@ import { SearchInput } from "@/components/search-input";
 import { Pagination } from "@/components/pagination";
 import { ProviderCard } from "@/components/provider-card";
 import { browseProviders } from "@/lib/data/providers";
+import type { Metadata } from "next";
+import { getBranding, brandPageIdentity } from "@/lib/branding";
 
-export const metadata = {
-  title: "Providers — Stellaris",
-  description: "Browse Terraform providers in the Stellaris registry",
-};
+export function generateMetadata(): Metadata {
+  const branding = getBranding();
+  return {
+    title: `Providers — ${brandPageIdentity()}`,
+    description: branding.whitelabelEnabled
+      ? "Browse providers in the registry"
+      : "Browse Terraform providers in the Stellaris registry",
+  };
+}
 
 export default async function ProvidersPage({
   searchParams,

@@ -11,6 +11,12 @@ import { isCfAccessEnabled } from "@/lib/auth/cf-access-config";
 
 export const SIGNUP_ENABLED_KEY = "signup_enabled";
 
+// Immutable uploads — controls whether published artifact bytes can be
+// overwritten. When ON, replacing existing bytes returns 409; initial publish
+// to an empty slot is always allowed. Default ON (fail-closed: immutability is
+// the safe default for a registry serving signed artifacts).
+export const IMMUTABLE_UPLOADS_KEY = "immutable_uploads";
+
 // Upstream proxy — controls whether the registry proxies requests to upstream
 // registries when a module/provider is not found locally.
 /** @deprecated Prefer SETTINGS_KEY.moduleProxyEnabled in lib/upstream/config.ts. */
@@ -71,6 +77,58 @@ export async function setSignupEnabled(enabled: boolean): Promise<void> {
   await db
     .insert(systemSettings)
     .values({ key: SIGNUP_ENABLED_KEY, value: enabled.toString() })
+    .onConflictDoUpdate({
+      target: systemSettings.key,
+      set: { value: enabled.toString(), updatedAt: new Date() },
+    });
+}
+
+// ============================================================================
+// Immutable Uploads Settings
+// ============================================================================
+
+/**
+ * Check if immutable uploads are enabled.
+ *
+ * When enabled, overwriting bytes for an already-published artifact slot
+ * (provider platform / module version) is rejected with 409. Initial publish
+ * to an empty slot is always allowed regardless of this setting.
+ *
+ * Defaults to true when the key is not set (fail-closed: immutability is the
+ * safe default). Also fails closed (true) on DB/read errors.
+ */
+export async function isImmutableUploadsEnabled(): Promise<boolean> {
+  try {
+    const db = getDb();
+    const setting = await db
+      .select()
+      .from(systemSettings)
+      .where(eq(systemSettings.key, IMMUTABLE_UPLOADS_KEY))
+      .get();
+
+    if (!setting) return true; // default immutable
+    return setting.value === "true";
+  } catch (error) {
+    console.error(
+      "[Settings] Failed to read immutable uploads status; defaulting to immutable",
+      {
+        key: IMMUTABLE_UPLOADS_KEY,
+        failMode: "immutable",
+        error,
+      },
+    );
+    return true; // fail-closed on DB/read errors
+  }
+}
+
+/**
+ * Enable or disable immutable uploads.
+ */
+export async function setImmutableUploads(enabled: boolean): Promise<void> {
+  const db = getDb();
+  await db
+    .insert(systemSettings)
+    .values({ key: IMMUTABLE_UPLOADS_KEY, value: enabled.toString() })
     .onConflictDoUpdate({
       target: systemSettings.key,
       set: { value: enabled.toString(), updatedAt: new Date() },

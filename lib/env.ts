@@ -46,8 +46,39 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((v) => (v === undefined ? undefined : v)),
+  // Whitelabeling — hide OSS/tech/sponsor branding, apply operator identity.
+  // Master switch. When "false" (default), default Stellaris branding is shown.
+  WHITELABEL_ENABLED: z.enum(["true", "false"]).default("false"),
+  // Operator brand name (e.g. "Evil Corp"). When enabled and unset, the UI
+  // degrades to generic (no brand name) but still strips tech/sponsor branding.
+  WHITELABEL_BRAND_NAME: z.string().optional(),
+  // Generic, vendor-free suffix after the brand name (e.g. "Registry").
+  WHITELABEL_TITLE_SUFFIX: z.string().optional(),
+  // Neutral hero tagline / meta description (no vendor/tech mentions).
+  WHITELABEL_TAGLINE: z.string().optional(),
+  // Custom logo + favicon by URL (external/CDN). Empty → default icon/favicon.
+  WHITELABEL_LOGO_URL: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z.string().url().optional(),
+  ),
+  WHITELABEL_FAVICON_URL: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z.string().url().optional(),
+  ),
+  // Footer line. Supports the {year} placeholder (current UTC year).
+  WHITELABEL_FOOTER_TEXT: z.string().optional(),
 });
 
-export const env = envSchema.parse(process.env);
+/**
+ * Parse and validate the current `process.env` against the schema.
+ *
+ * Exposed (rather than only the memoized `env` below) so resolvers that need
+ * to observe runtime/test mutations of `process.env` can re-read live values.
+ */
+export function parseEnv(): Env {
+  return envSchema.parse(process.env);
+}
+
+export const env = parseEnv();
 
 export type Env = z.infer<typeof envSchema>;

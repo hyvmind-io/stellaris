@@ -11,10 +11,12 @@ import {
 import { SignupForm } from "@/components/auth/signup-form";
 import { isSignupEnabled } from "@/lib/data/settings";
 import { isCfAccessEnabled } from "@/lib/auth/cf-access-config";
+import type { Metadata } from "next";
+import { brandPageIdentity } from "@/lib/branding";
 
-export const metadata = {
-  title: "Sign Up — Stellaris",
-};
+export function generateMetadata(): Metadata {
+  return { title: `Sign Up — ${brandPageIdentity()}` };
+}
 
 export default async function SignupPage() {
   // CF Access deployments do not expose self-serve signup at all — identities
