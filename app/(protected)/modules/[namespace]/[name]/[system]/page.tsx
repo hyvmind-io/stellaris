@@ -19,6 +19,7 @@ import {
   resolveModuleTags,
 } from "@/lib/data/modules";
 import { brandPageIdentity } from "@/lib/branding";
+import { getRegistryHost } from "@/lib/registry-host";
 
 interface PageProps {
   params: Promise<{ namespace: string; name: string; system: string }>;
@@ -123,7 +124,7 @@ export default async function ModuleDetailPage({ params }: PageProps) {
               title="Terraform Configuration"
               language="hcl"
               code={`module "${name}" {
-  source  = "stellaris.example.com/${namespace}/${name}/${system}"
+  source  = "${getRegistryHost()}/${namespace}/${name}/${system}"
   version = "${latestModule.version}"
 }`}
             />

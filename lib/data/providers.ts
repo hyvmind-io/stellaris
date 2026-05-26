@@ -1,4 +1,5 @@
 import { eq, and, count, desc, inArray, sql, SQL } from "drizzle-orm";
+import type { BatchItem } from "drizzle-orm/batch";
 import { getDb } from "@/db/client";
 import { providers, providerPlatforms, gpgPublicKeys } from "@/db/schema";
 import type { Provider, ProviderPlatform, GpgPublicKey } from "@/db/schema";
@@ -218,26 +219,44 @@ export async function saveProvider(params: {
 }): Promise<Provider> {
   const db = getDb();
 
-  return db.transaction(async (tx) => {
-    // 1. Insert provider
-    const [provider] = await tx
-      .insert(providers)
-      .values({
-        namespace: params.namespace,
-        type: params.type,
-        version: params.version,
-        protocols: params.protocols,
-      })
-      .returning();
+  // Cloudflare D1 forbids interactive SQL transactions (BEGIN/SAVEPOINT), so we
+  // cannot use db.transaction(). Instead we use db.batch([...]), which runs all
+  // statements sequentially inside ONE implicit atomic transaction.
+  //
+  // The provider's auto-increment id is not known until its INSERT executes, and
+  // batch statements are built up front (no mid-batch reads). We therefore have
+  // the platform/gpg inserts resolve the provider id via a subquery on the
+  // natural unique key (namespace, type, version). Because the provider INSERT is
+  // the first statement in the same atomic batch, the subquery resolves to the
+  // freshly inserted row for every dependent row.
+  const providerIdSubquery = sql<number>`(
+    SELECT ${providers.id} FROM ${providers}
+    WHERE ${providers.namespace} = ${params.namespace}
+      AND ${providers.type} = ${params.type}
+      AND ${providers.version} = ${params.version}
+  )`;
 
-    // Insert always returns exactly one row on success; failure throws
-    if (!provider) throw new Error("Provider insert returned no rows");
+  // The provider INSERT must be the head of the batch and must return its row.
+  const insertProvider = db
+    .insert(providers)
+    .values({
+      namespace: params.namespace,
+      type: params.type,
+      version: params.version,
+      protocols: params.protocols,
+    })
+    .returning();
 
-    // 2. Insert platforms
-    if (params.platforms.length > 0) {
-      await tx.insert(providerPlatforms).values(
+  // Trailing statements (platforms, gpg keys) — all reference the provider via
+  // the subquery above. Collected as generic batch items; the batch tuple is
+  // assembled below with the provider insert guaranteed at index 0.
+  const trailing: BatchItem<"sqlite">[] = [];
+
+  if (params.platforms.length > 0) {
+    trailing.push(
+      db.insert(providerPlatforms).values(
         params.platforms.map((p) => ({
-          providerId: provider.id,
+          providerId: providerIdSubquery,
           os: p.os,
           arch: p.arch,
           filename: p.filename,
@@ -246,24 +265,32 @@ export async function saveProvider(params: {
           shasumUrl: p.shasumUrl,
           shasumSignatureUrl: p.shasumSignatureUrl,
         })),
-      );
-    }
+      ),
+    );
+  }
 
-    // 3. Insert GPG public keys
-    if (params.gpgPublicKeys.length > 0) {
-      await tx.insert(gpgPublicKeys).values(
+  if (params.gpgPublicKeys.length > 0) {
+    trailing.push(
+      db.insert(gpgPublicKeys).values(
         params.gpgPublicKeys.map((k) => ({
-          providerId: provider.id,
+          providerId: providerIdSubquery,
           keyId: k.keyId,
           asciiArmor: k.asciiArmor,
           source: k.source ?? "",
           sourceUrl: k.sourceUrl,
         })),
-      );
-    }
+      ),
+    );
+  }
 
-    return provider;
-  });
+  // db.batch requires a non-empty tuple; the provider insert is always present.
+  const results = await db.batch([insertProvider, ...trailing]);
+
+  // First statement is the provider insert with .returning().
+  const provider = results[0][0];
+  if (!provider) throw new Error("Provider insert returned no rows");
+
+  return provider;
 }
 
 /**
@@ -288,87 +315,132 @@ export async function replaceProviderPlatform(
 ): Promise<{ provider: Provider; platform: ProviderPlatform }> {
   const db = getDb();
 
-  return db.transaction(async (tx) => {
-    const updatedProviderRows = await tx
-      .update(providers)
-      .set({
-        updatedAt: new Date(),
-        revision: sql`${providers.revision} + 1`,
-      })
-      .where(
-        and(
-          eq(providers.namespace, namespace),
-          eq(providers.type, type),
-          eq(providers.version, version),
-          eq(providers.revision, expectedRevision),
-        ),
-      )
-      .returning();
+  // Cloudflare D1 forbids interactive SQL transactions, so the original
+  // read-then-branch transaction is reimplemented with D1-native atomic
+  // primitives:
+  //
+  //  1. A guarded conditional UPDATE bumps the provider revision ONLY when it
+  //     currently equals expectedRevision. This is atomic by itself: 0 rows
+  //     returned means a concurrency conflict.
+  //  2. A single SQLite UPSERT (INSERT ... ON CONFLICT(provider_id, os, arch)
+  //     DO UPDATE) replaces-or-inserts the platform. The unique index
+  //     `provider_platforms_unique_idx` on (provider_id, os, arch) backs the
+  //     conflict target, so no read-then-branch is needed.
+  //
+  // Both run inside ONE db.batch([...]) (one implicit atomic transaction). The
+  // upsert resolves the provider id via a subquery gated on the *bumped*
+  // revision (expectedRevision + 1). If the guard failed (conflict), no row
+  // carries that revision, the subquery yields NULL, the NOT NULL FK on
+  // provider_id is violated, and the entire batch rolls back atomically — the
+  // platform is never written without the matching revision bump.
+  const bumpedProviderIdSubquery = sql<number>`(
+    SELECT ${providers.id} FROM ${providers}
+    WHERE ${providers.namespace} = ${namespace}
+      AND ${providers.type} = ${type}
+      AND ${providers.version} = ${version}
+      AND ${providers.revision} = ${expectedRevision + 1}
+  )`;
 
-    if (updatedProviderRows.length === 0) {
-      const current = await tx
-        .select({ revision: providers.revision })
-        .from(providers)
-        .where(
-          and(
-            eq(providers.namespace, namespace),
-            eq(providers.type, type),
-            eq(providers.version, version),
-          ),
-        )
-        .limit(1);
-      throw new RevisionConflictError(
-        expectedRevision,
-        current[0]?.revision ?? null,
-      );
-    }
+  const guardedUpdate = db
+    .update(providers)
+    .set({
+      updatedAt: new Date(),
+      revision: sql`${providers.revision} + 1`,
+    })
+    .where(
+      and(
+        eq(providers.namespace, namespace),
+        eq(providers.type, type),
+        eq(providers.version, version),
+        eq(providers.revision, expectedRevision),
+      ),
+    )
+    .returning();
 
-    const provider = updatedProviderRows[0]!;
-
-    const existingRows = await tx
-      .select()
-      .from(providerPlatforms)
-      .where(
-        and(
-          eq(providerPlatforms.providerId, provider.id),
-          eq(providerPlatforms.os, platform.os),
-          eq(providerPlatforms.arch, platform.arch),
-        ),
-      )
-      .limit(1);
-
-    if (existingRows.length > 0) {
-      const updatedRows = await tx
-        .update(providerPlatforms)
-        .set({
-          filename: platform.filename,
-          shasum: platform.shasum,
-          location: platform.location,
-          shasumUrl: platform.shasumUrl,
-          shasumSignatureUrl: platform.shasumSignatureUrl,
-        })
-        .where(eq(providerPlatforms.id, existingRows[0]!.id))
-        .returning();
-
-      return { provider, platform: updatedRows[0]! };
-    }
-
-    const insertedRows = await tx
-      .insert(providerPlatforms)
-      .values({
-        providerId: provider.id,
-        os: platform.os,
-        arch: platform.arch,
+  const platformUpsert = db
+    .insert(providerPlatforms)
+    .values({
+      providerId: bumpedProviderIdSubquery,
+      os: platform.os,
+      arch: platform.arch,
+      filename: platform.filename,
+      shasum: platform.shasum,
+      location: platform.location,
+      shasumUrl: platform.shasumUrl,
+      shasumSignatureUrl: platform.shasumSignatureUrl,
+    })
+    .onConflictDoUpdate({
+      target: [
+        providerPlatforms.providerId,
+        providerPlatforms.os,
+        providerPlatforms.arch,
+      ],
+      set: {
         filename: platform.filename,
         shasum: platform.shasum,
         location: platform.location,
         shasumUrl: platform.shasumUrl,
         shasumSignatureUrl: platform.shasumSignatureUrl,
-      })
-      .returning();
+      },
+    })
+    .returning();
 
-    return { provider, platform: insertedRows[0]! };
-  });
+  let updatedProviderRows: Provider[];
+  let upsertedPlatformRows: ProviderPlatform[];
+  try {
+    const [providerRows, platformRows] = await db.batch([
+      guardedUpdate,
+      platformUpsert,
+    ]);
+    updatedProviderRows = providerRows;
+    upsertedPlatformRows = platformRows;
+  } catch (err) {
+    // A failed guard makes the gated subquery yield NULL → NOT NULL FK
+    // violation → atomic rollback. Translate that into the documented
+    // concurrency error after confirming the revision really mismatches.
+    const current = await db
+      .select({ revision: providers.revision })
+      .from(providers)
+      .where(
+        and(
+          eq(providers.namespace, namespace),
+          eq(providers.type, type),
+          eq(providers.version, version),
+        ),
+      )
+      .limit(1);
+
+    if (current[0]?.revision !== expectedRevision) {
+      throw new RevisionConflictError(
+        expectedRevision,
+        current[0]?.revision ?? null,
+      );
+    }
+    // Revision matched yet the batch still failed — surface the real error.
+    throw err;
+  }
+
+  // Defensive: if the guard somehow matched 0 rows without throwing, treat as
+  // a conflict (preserves the original contract).
+  if (updatedProviderRows.length === 0) {
+    const current = await db
+      .select({ revision: providers.revision })
+      .from(providers)
+      .where(
+        and(
+          eq(providers.namespace, namespace),
+          eq(providers.type, type),
+          eq(providers.version, version),
+        ),
+      )
+      .limit(1);
+    throw new RevisionConflictError(
+      expectedRevision,
+      current[0]?.revision ?? null,
+    );
+  }
+
+  return { provider: updatedProviderRows[0]!, platform: upsertedPlatformRows[0]! };
 }
 
 /**

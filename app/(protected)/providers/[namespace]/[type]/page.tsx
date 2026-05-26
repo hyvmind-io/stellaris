@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { CodeBlock } from "@/components/code-block";
 import { getProviderVersions } from "@/lib/data/providers";
 import { brandPageIdentity } from "@/lib/branding";
+import { getRegistryHost } from "@/lib/registry-host";
 
 interface PageProps {
   params: Promise<{ namespace: string; type: string }>;
@@ -88,7 +89,7 @@ export default async function ProviderDetailPage({ params }: PageProps) {
               code={`terraform {
   required_providers {
     ${type} = {
-      source  = "stellaris.example.com/${namespace}/${type}"
+      source  = "${getRegistryHost()}/${namespace}/${type}"
       version = "~> ${latest.version.split(".")[0]}.0"
     }
   }

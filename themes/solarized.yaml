@@ -1,0 +1,60 @@
+# Example theme — Solarized (Ethan Schoonover palette).
+#
+# Demonstrates the YAML theme format. Color values may be authored as hex
+# (#rrggbb / #rgb) OR HSL channels ("H S% L%"); the compiler normalizes each to
+# the format its CSS variable expects. Optional groups omitted below
+# (accent-palette, brand, shadows, sidebar, charts) inherit the built-in
+# Dracula/Alucard default values at compile time.
+#
+# Drop additional themes/<name>.yaml or themes/<name>.jsonc files and run
+# `pnpm compile-themes` (also runs at prebuild) to make them selectable.
+
+name: solarized
+label: Solarized
+
+light:
+  background: "#FDF6E3"
+  foreground: "#073642"
+  card: "#FDF6E3"
+  card-foreground: "#073642"
+  popover: "#FDF6E3"
+  popover-foreground: "#073642"
+  primary: "#268BD2"
+  primary-foreground: "#FDF6E3"
+  secondary: "#2AA198"
+  secondary-foreground: "#FDF6E3"
+  muted: "#EEE8D5"
+  muted-foreground: "#657B83"
+  accent: "#B58900"
+  accent-foreground: "#FDF6E3"
+  destructive: "#DC322F"
+  destructive-foreground: "#FDF6E3"
+  border: "#EEE8D5"
+  input: "#EEE8D5"
+  ring: "#268BD2"
+  radius: "0.5rem"
+  charts: ["#268BD2", "#2AA198", "#859900", "#B58900", "#CB4B16"]
+
+dark:
+  # Mixed input formats: HSL channels and hex both accepted.
+  background: "192 100% 11%"
+  foreground: "44 87% 94%"
+  card: "192 81% 14%"
+  card-foreground: "44 87% 94%"
+  popover: "192 81% 14%"
+  popover-foreground: "44 87% 94%"
+  primary: "#268BD2"
+  primary-foreground: "#002B36"
+  secondary: "#2AA198"
+  secondary-foreground: "#002B36"
+  muted: "192 50% 20%"
+  muted-foreground: "186 8% 55%"
+  accent: "#B58900"
+  accent-foreground: "#002B36"
+  destructive: "#DC322F"
+  destructive-foreground: "#FDF6E3"
+  border: "192 50% 20%"
+  input: "192 50% 20%"
+  ring: "#268BD2"
+  radius: "0.5rem"
+  charts: ["#268BD2", "#2AA198", "#859900", "#B58900", "#CB4B16"]

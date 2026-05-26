@@ -1,6 +1,21 @@
 @import "tailwindcss";
 
 /**
+ * Compiled custom themes (PRD-02). Generated at prebuild by
+ * scripts/compile-themes.ts from themes/*.{yaml,jsonc}; gitignored.
+ *
+ * Emits `:root[data-theme="x"]` (light) + `:root[data-theme="x"].dark`
+ * selectors whose higher specificity (0,2,0 / 0,3,0) deterministically overrides
+ * the built-in `:root`/`.dark` default below (0,1,0) when a `data-theme`
+ * attribute is present on <html> — regardless of this `@import` appearing before
+ * the `:root`/`.dark` blocks. When the attribute is absent or `"default"`, the
+ * built-in Dracula/Alucard scheme applies (the guaranteed fallback). Safe to
+ * ship even with zero custom themes — the file then contains only a header
+ * comment.
+ */
+@import "./generated/themes.css";
+
+/**
  * Stellaris Design System — Dracula Pro / Alucard Theme
  *
  * Light Mode: Alucard Pro (via :root)
