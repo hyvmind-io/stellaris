@@ -4,11 +4,11 @@ import type { Metadata } from "next";
 import { ChevronRight, Cpu } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { CodeBlock } from "@/components/code-block";
-import { getProviderVersions } from "@/lib/data/providers";
 import { brandPageIdentity } from "@/lib/branding";
 import { getRegistryHost } from "@/lib/registry-host";
+import { ProviderVersionList } from "@/components/providers/provider-version-list";
+import { getProviderVersionsDetailed } from "@/lib/data/providers";
 
 interface PageProps {
   params: Promise<{ namespace: string; type: string }>;
@@ -27,10 +27,10 @@ export async function generateMetadata({
 export default async function ProviderDetailPage({ params }: PageProps) {
   const { namespace, type } = await params;
 
-  let versions: Awaited<ReturnType<typeof getProviderVersions>> = [];
+  let versions: Awaited<ReturnType<typeof getProviderVersionsDetailed>> = [];
 
   try {
-    versions = await getProviderVersions(namespace, type);
+    versions = await getProviderVersionsDetailed(namespace, type);
   } catch (error) {
     console.warn("ProviderDetailPage: failed to fetch provider data:", error);
   }
@@ -126,40 +126,7 @@ export default async function ProviderDetailPage({ params }: PageProps) {
               {versions.length}
             </Badge>
           </h2>
-          <ScrollArea className="h-[500px] rounded-lg border border-border">
-            <div className="p-4 space-y-3">
-              {versions.map((v, idx) => (
-                <div
-                  key={v.version}
-                  className={`rounded-md border px-4 py-3 ${
-                    idx === 0
-                      ? "border-primary/50 bg-primary/5"
-                      : "border-border hover:bg-muted"
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium">v{v.version}</span>
-                    {idx === 0 && (
-                      <Badge variant="outline" className="text-xs">
-                        latest
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {v.platforms.map((p) => (
-                      <Badge
-                        key={`${v.version}-${p.os}-${p.arch}`}
-                        variant="secondary"
-                        className="text-xs font-mono"
-                      >
-                        {p.os}/{p.arch}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
+          <ProviderVersionList versions={versions} />
         </div>
       </div>
     </div>

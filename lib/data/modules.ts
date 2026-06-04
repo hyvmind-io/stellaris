@@ -184,6 +184,33 @@ export async function getModuleVersions(
 }
 
 /**
+ * Get all versions for a module (namespace/name/provider) as FULL rows.
+ *
+ * Unlike getModuleVersions (which returns only the version string per row),
+ * this returns the complete Module record for each release so the UI can show
+ * a details modal — owner, description, source, location, tags, definition,
+ * downloads, timestamps, revision. Newest-first.
+ */
+export async function getModuleVersionsDetailed(
+  namespace: string,
+  name: string,
+  provider: string,
+): Promise<Module[]> {
+  const db = getDb();
+  return db
+    .select()
+    .from(modules)
+    .where(
+      and(
+        eq(modules.namespace, namespace),
+        eq(modules.name, name),
+        eq(modules.provider, provider),
+      ),
+    )
+    .orderBy(desc(modules.publishedAt));
+}
+
+/**
  * Resolve module versions with multi-system fallback.
  *
  * Resolution order:
