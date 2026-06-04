@@ -11,11 +11,11 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { CodeBlock } from "@/components/code-block";
+import { ModuleVersionList } from "@/components/modules/module-version-list";
 import {
   getModuleLatestVersion,
-  getModuleVersions,
+  getModuleVersionsDetailed,
   resolveModuleTags,
 } from "@/lib/data/modules";
 import { brandPageIdentity } from "@/lib/branding";
@@ -39,12 +39,12 @@ export default async function ModuleDetailPage({ params }: PageProps) {
   const { namespace, name, system } = await params;
 
   let latestModule;
-  let versions: Awaited<ReturnType<typeof getModuleVersions>> = [];
+  let versions: Awaited<ReturnType<typeof getModuleVersionsDetailed>> = [];
 
   try {
     [latestModule, versions] = await Promise.all([
       getModuleLatestVersion(namespace, name, system),
-      getModuleVersions(namespace, name, system),
+      getModuleVersionsDetailed(namespace, name, system),
     ]);
   } catch (error) {
     console.warn("ModuleDetailPage: failed to fetch module data:", error);
@@ -151,27 +151,10 @@ export default async function ModuleDetailPage({ params }: PageProps) {
               {versions.length}
             </Badge>
           </h2>
-          <ScrollArea className="h-[400px] rounded-lg border border-border">
-            <div className="p-4 space-y-2">
-              {versions.map((v) => (
-                <div
-                  key={v.version}
-                  className={`flex items-center justify-between rounded-md px-3 py-2 text-sm ${
-                    v.version === latestModule.version
-                      ? "bg-primary/10 text-foreground font-medium"
-                      : "hover:bg-muted text-muted-foreground"
-                  }`}
-                >
-                  <span>v{v.version}</span>
-                  {v.version === latestModule.version && (
-                    <Badge variant="outline" className="text-xs">
-                      latest
-                    </Badge>
-                  )}
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
+          <ModuleVersionList
+            versions={versions}
+            latestVersion={latestModule.version}
+          />
         </div>
       </div>
     </div>

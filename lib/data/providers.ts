@@ -106,6 +106,89 @@ export async function getProviderVersions(
 }
 
 /**
+ * Full metadata for a single provider version — everything stored for the
+ * release: provider row fields, all platform artifacts, and signing keys.
+ * Used by the UI "version info" modal.
+ */
+export type ProviderVersionDetail = {
+  id: number;
+  namespace: string;
+  type: string;
+  version: string;
+  protocols: string[];
+  publishedAt: Date;
+  updatedAt: Date;
+  revision: number;
+  platforms: ProviderPlatform[];
+  gpgKeys: GpgPublicKey[];
+};
+
+/**
+ * Get all versions for a provider (namespace/type) with their COMPLETE
+ * metadata — full platform records and GPG signing keys included.
+ *
+ * Unlike getProviderVersions (which returns a trimmed shape for list rows),
+ * this returns everything stored per release so the UI can show a details
+ * modal without a follow-up fetch. Three queries total: provider rows, then a
+ * single batched platform fetch and GPG-key fetch (no N+1).
+ * Versions returned newest-first.
+ */
+export async function getProviderVersionsDetailed(
+  namespace: string,
+  type: string,
+): Promise<ProviderVersionDetail[]> {
+  const db = getDb();
+
+  const versionRows = await db
+    .select()
+    .from(providers)
+    .where(and(eq(providers.namespace, namespace), eq(providers.type, type)))
+    .orderBy(desc(providers.publishedAt));
+
+  if (versionRows.length === 0) return [];
+
+  const ids = versionRows.map((p) => p.id);
+
+  const [platformRows, gpgRows] = await Promise.all([
+    db
+      .select()
+      .from(providerPlatforms)
+      .where(inArray(providerPlatforms.providerId, ids)),
+    db
+      .select()
+      .from(gpgPublicKeys)
+      .where(inArray(gpgPublicKeys.providerId, ids)),
+  ]);
+
+  const platformsByProvider = new Map<number, ProviderPlatform[]>();
+  for (const p of platformRows) {
+    const list = platformsByProvider.get(p.providerId);
+    if (list) list.push(p);
+    else platformsByProvider.set(p.providerId, [p]);
+  }
+
+  const gpgByProvider = new Map<number, GpgPublicKey[]>();
+  for (const k of gpgRows) {
+    const list = gpgByProvider.get(k.providerId);
+    if (list) list.push(k);
+    else gpgByProvider.set(k.providerId, [k]);
+  }
+
+  return versionRows.map((p) => ({
+    id: p.id,
+    namespace: p.namespace,
+    type: p.type,
+    version: p.version,
+    protocols: p.protocols,
+    publishedAt: p.publishedAt,
+    updatedAt: p.updatedAt,
+    revision: p.revision,
+    platforms: platformsByProvider.get(p.id) ?? [],
+    gpgKeys: gpgByProvider.get(p.id) ?? [],
+  }));
+}
+
+/**
  * Find a complete provider package for a specific version + platform.
  * Returns everything Terraform CLI needs for the download response:
  * - Provider metadata (protocols)

@@ -16,8 +16,17 @@ const mockResolveModuleTags = vi.fn();
 vi.mock("@/lib/data/modules", () => ({
   getModuleLatestVersion: (...args: unknown[]) =>
     mockGetModuleLatestVersion(...args),
-  getModuleVersions: (...args: unknown[]) => mockGetModuleVersions(...args),
+  getModuleVersionsDetailed: (...args: unknown[]) =>
+    mockGetModuleVersions(...args),
   resolveModuleTags: (...args: unknown[]) => mockResolveModuleTags(...args),
+}));
+
+// Stub the interactive (client) version list — its internals are covered by the
+// component's own concerns; the page test only verifies header/breadcrumb/usage.
+vi.mock("@/components/modules/module-version-list", () => ({
+  ModuleVersionList: ({ versions }: { versions: unknown[] }) => (
+    <div data-testid="module-version-list" data-count={versions.length} />
+  ),
 }));
 
 // Mock shadcn/ui and sub-components to simple HTML for testability
