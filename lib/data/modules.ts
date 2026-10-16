@@ -456,6 +456,8 @@ export async function browseModules(params: {
   // Subquery: find the latest id per unique (namespace, name, provider)
   // Uses a correlated subquery to pick the row with the newest published_at,
   // breaking ties by id DESC so timestamp collisions never produce duplicates.
+  // Outer columns are written as raw `modules.*`: drizzle renders interpolated
+  // columns unqualified here, which SQLite would bind to m2 (self-compare).
   const latestSq = db
     .select({
       namespace: modules.namespace,
@@ -463,9 +465,9 @@ export async function browseModules(params: {
       provider: modules.provider,
       latestId: sql<number>`(
         SELECT m2.id FROM modules m2
-        WHERE m2.namespace = ${modules.namespace}
-          AND m2.name = ${modules.name}
-          AND m2.provider = ${modules.provider}
+        WHERE m2.namespace = modules.namespace
+          AND m2.name = modules.name
+          AND m2.provider = modules.provider
         ORDER BY m2.published_at DESC, m2.id DESC
         LIMIT 1
       )`.as("latest_id"),

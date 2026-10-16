@@ -657,8 +657,8 @@ export async function browseProviders(params: {
       type: providers.type,
       latestId: sql<number>`(
         SELECT p2.id FROM providers p2
-        WHERE p2.namespace = ${providers.namespace}
-          AND p2.type = ${providers.type}
+        WHERE p2.namespace = providers.namespace
+          AND p2.type = providers.type
         ORDER BY p2.published_at DESC, p2.id DESC
         LIMIT 1
       )`.as("latest_id"),
