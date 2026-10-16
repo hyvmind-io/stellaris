@@ -10,3 +10,11 @@ export const E2E_USER = {
   username: "e2e-admin",
   password: "e2e-password-not-secret",
 } as const;
+
+/** Plaintext keys seeded into `api_keys`; local test DB only. */
+export const E2E_API_KEYS = {
+  admin: { key: `stlr_${"a0".repeat(20)}`, permissions: ["admin"] },
+  modulesWrite: { key: `stlr_${"b1".repeat(20)}`, permissions: ["modules:read", "modules:write"] },
+  providersWrite: { key: `stlr_${"c2".repeat(20)}`, permissions: ["providers:read", "providers:write"] },
+  readOnly: { key: `stlr_${"d3".repeat(20)}`, permissions: ["modules:read", "providers:read"] },
+} as const;

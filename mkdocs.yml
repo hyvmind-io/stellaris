@@ -39,11 +39,19 @@ exclude_docs: |
   implementation/
   reviews/
 
+# Promote broken links and anchors to warnings so `mkdocs build --strict` fails on them.
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+
 nav:
   - Home: index.md
   - Authentication: authentication.md
   - Publishing Guide: publishing.md
   - API Reference: API.md
+  - Upgrading: upgrading.md
   - Configuration: configuration.md
   - Whitelabeling: whitelabeling.md
   - Rate Limiting: RATE_LIMITING.md

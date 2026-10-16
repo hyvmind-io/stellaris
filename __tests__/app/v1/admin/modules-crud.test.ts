@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-vi.mock("@/lib/auth/middleware", () => ({
-  requireAuth: vi.fn(),
-  requireAdminWriteAuth: vi.fn(),
-}));
+vi.mock("@/lib/auth/middleware", () => ({ requireAuth: vi.fn(), requirePublishAuth: vi.fn() }));
 
 vi.mock("@/lib/data/modules", () => ({
   findModule: vi.fn(),
@@ -49,7 +46,7 @@ vi.mock("@/lib/data/aliases", () => ({
   createModuleAlias: vi.fn(),
 }));
 
-import { requireAuth, requireAdminWriteAuth } from "@/lib/auth/middleware";
+import { requireAuth, requirePublishAuth } from "@/lib/auth/middleware";
 import { findModule, saveModule } from "@/lib/data/modules";
 import {
   conditionalModuleUpdate,
@@ -62,16 +59,16 @@ import {
   validateModuleAliasCreateConstraints,
   createModuleAlias,
 } from "@/lib/data/aliases";
-import { POST as postVersion } from "@/app/v1/admin/modules/[namespace]/[name]/[system]/versions/route";
+import { POST as postVersion } from "@/app/v1/publish/modules/[namespace]/[name]/[system]/versions/route";
 import {
   GET as getVersion,
   PATCH as patchVersion,
   DELETE as deleteVersion,
-} from "@/app/v1/admin/modules/[namespace]/[name]/[system]/versions/[version]/route";
+} from "@/app/v1/publish/modules/[namespace]/[name]/[system]/versions/[version]/route";
 import { POST as postAlias } from "@/app/v1/admin/modules/aliases/route";
 
 const mockRequireAuth = vi.mocked(requireAuth);
-const mockRequireAdminWriteAuth = vi.mocked(requireAdminWriteAuth);
+const mockRequirePublishAuth = vi.mocked(requirePublishAuth);
 const mockFindModule = vi.mocked(findModule);
 const mockSaveModule = vi.mocked(saveModule);
 const mockConditionalModuleUpdate = vi.mocked(conditionalModuleUpdate);
@@ -119,7 +116,7 @@ describe("admin module CRUD routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRequireAuth.mockResolvedValue(adminApiKey);
-    mockRequireAdminWriteAuth.mockResolvedValue(adminApiKey);
+    mockRequirePublishAuth.mockResolvedValue(adminApiKey);
     mockWriteAuditLog.mockResolvedValue({ id: 1 } as never);
     mockDeleteModuleAliasesByTarget.mockResolvedValue([]);
   });
@@ -135,7 +132,7 @@ describe("admin module CRUD routes", () => {
     form.set("module", new File(["fake-tar"], "module.tar.gz"));
 
     const request = new NextRequest(
-      "http://localhost/v1/admin/modules/hashicorp/vpc/aws/versions",
+      "http://localhost/v1/publish/modules/hashicorp/vpc/aws/versions",
       {
         method: "POST",
         body: form,
@@ -157,7 +154,7 @@ describe("admin module CRUD routes", () => {
 
   it("PATCH /versions/:version requires If-Match", async () => {
     const request = new NextRequest(
-      "http://localhost/v1/admin/modules/hashicorp/vpc/aws/versions/1.0.0",
+      "http://localhost/v1/publish/modules/hashicorp/vpc/aws/versions/1.0.0",
       {
         method: "PATCH",
         body: JSON.stringify({ owner: "new-owner" }),
@@ -183,7 +180,7 @@ describe("admin module CRUD routes", () => {
     mockConditionalModuleUpdate.mockResolvedValue(updated);
 
     const request = new NextRequest(
-      "http://localhost/v1/admin/modules/hashicorp/vpc/aws/versions/1.0.0",
+      "http://localhost/v1/publish/modules/hashicorp/vpc/aws/versions/1.0.0",
       {
         method: "PATCH",
         body: JSON.stringify({ owner: "new-owner" }),
@@ -221,7 +218,7 @@ describe("admin module CRUD routes", () => {
     mockFindModule.mockResolvedValueOnce(undefined);
 
     const request = new NextRequest(
-      "http://localhost/v1/admin/modules/hashicorp/vpc/aws/versions/1.0.0",
+      "http://localhost/v1/publish/modules/hashicorp/vpc/aws/versions/1.0.0",
       {
         method: "DELETE",
         headers: { "If-Match": 'W/"3"' },
@@ -251,7 +248,7 @@ describe("admin module CRUD routes", () => {
     mockFindModule.mockResolvedValue(moduleRow);
 
     const request = new NextRequest(
-      "http://localhost/v1/admin/modules/hashicorp/vpc/aws/versions/1.0.0",
+      "http://localhost/v1/publish/modules/hashicorp/vpc/aws/versions/1.0.0",
       {
         method: "GET",
       },
@@ -275,7 +272,6 @@ describe("admin module alias route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRequireAuth.mockResolvedValue(adminApiKey);
-    mockRequireAdminWriteAuth.mockResolvedValue(adminApiKey);
     mockWriteAuditLog.mockResolvedValue({ id: 1 } as never);
   });
 

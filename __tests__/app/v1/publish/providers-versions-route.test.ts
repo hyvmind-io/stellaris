@@ -1,9 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
-vi.mock("@/lib/auth/middleware", () => ({
-  requireAdminWriteAuth: vi.fn(),
-}));
+vi.mock("@/lib/auth/middleware", () => ({ requirePublishAuth: vi.fn() }));
 
 vi.mock("@/lib/validation/admin", () => ({
   adminProviderCreateBody: {
@@ -21,20 +19,20 @@ vi.mock("@/lib/data/audit", () => ({
   writeAuditLog: vi.fn(),
 }));
 
-import { POST } from "@/app/v1/admin/providers/[namespace]/[type]/versions/route";
-import { requireAdminWriteAuth } from "@/lib/auth/middleware";
+import { POST } from "@/app/v1/publish/providers/[namespace]/[type]/versions/route";
+import { requirePublishAuth } from "@/lib/auth/middleware";
 import { adminProviderCreateBody } from "@/lib/validation/admin";
 import { findProvider, saveProvider } from "@/lib/data/providers";
 
-const mockRequireAdminWriteAuth = vi.mocked(requireAdminWriteAuth);
+const mockRequirePublishAuth = vi.mocked(requirePublishAuth);
 const mockAdminProviderCreateBody = vi.mocked(adminProviderCreateBody);
 const mockFindProvider = vi.mocked(findProvider);
 const mockSaveProvider = vi.mocked(saveProvider);
 
-describe("POST /v1/admin/providers/:namespace/:type/versions", () => {
+describe("POST /v1/publish/providers/:namespace/:type/versions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockRequireAdminWriteAuth.mockResolvedValue({
+    mockRequirePublishAuth.mockResolvedValue({
       id: 1,
       name: "admin",
     } as never);

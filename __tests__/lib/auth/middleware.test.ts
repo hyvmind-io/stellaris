@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
-import { requireAuth, requireAdminWriteAuth } from "@/lib/auth/middleware";
+import { requireAuth, requirePublishAuth } from "@/lib/auth/middleware";
 
 vi.mock("@/lib/auth/api-keys", () => ({
   validateApiKey: vi.fn(),
@@ -187,62 +187,57 @@ describe("requireAuth", () => {
   });
 });
 
-describe("requireAdminWriteAuth", () => {
+describe("requirePublishAuth", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
+  function publishRequest(path: string, method = "POST"): NextRequest {
+    return new NextRequest(`http://localhost${path}`, {
+      method,
+      headers: { Authorization: "Bearer stlr_key" },
+    });
+  }
+
   it("returns 403 for non-mutable methods", async () => {
-    const request = new NextRequest("http://localhost/v1/admin/modules", {
-      method: "GET",
-      headers: { Authorization: "Bearer stlr_admin" },
-    });
-
-    const result = await requireAdminWriteAuth(request);
-    expect(result).toBeInstanceOf(Response);
+    const result = await requirePublishAuth(
+      publishRequest("/v1/publish/modules", "GET"),
+      "modules:write",
+    );
     expect((result as Response).status).toBe(403);
+    expect(mockValidateApiKey).not.toHaveBeenCalled();
   });
 
-  it("returns 403 for non-admin namespace paths", async () => {
-    const request = new NextRequest("http://localhost/v1/modules", {
-      method: "PATCH",
-      headers: { Authorization: "Bearer stlr_admin" },
-    });
+  it.each(["/v1/admin/modules/aliases", "/v1/modules/acme/vpc/aws/1.0.0"])(
+    "returns 403 outside /v1/publish (%s)",
+    async (path) => {
+      const result = await requirePublishAuth(publishRequest(path, "PATCH"), "modules:write");
+      expect((result as Response).status).toBe(403);
+      expect(mockValidateApiKey).not.toHaveBeenCalled();
+    },
+  );
 
-    const result = await requireAdminWriteAuth(request);
-    expect(result).toBeInstanceOf(Response);
-    expect((result as Response).status).toBe(403);
-  });
+  it.each([
+    ["modules:write", "modules:write"],
+    ["providers:write", "providers:write"],
+    ["admin", "modules:write"],
+    ["admin", "providers:write"],
+  ] as const)("a %s key may write when %s is required", async (granted, required) => {
+    mockValidateApiKey.mockResolvedValue({ ...MOCK_API_KEY, permissions: [granted] });
 
-  it("requires admin permission for mutable /v1/admin routes", async () => {
-    mockValidateApiKey.mockResolvedValue({
-      ...MOCK_API_KEY,
-      permissions: ["modules:write"],
-    });
-
-    const request = new NextRequest("http://localhost/v1/admin/modules", {
-      method: "PATCH",
-      headers: { Authorization: "Bearer stlr_non_admin" },
-    });
-
-    const result = await requireAdminWriteAuth(request);
-    expect(result).toBeInstanceOf(Response);
-    expect((result as Response).status).toBe(403);
-  });
-
-  it("returns ApiKey for admin permission on mutable /v1/admin routes", async () => {
-    mockValidateApiKey.mockResolvedValue({
-      ...MOCK_API_KEY,
-      permissions: ["admin"],
-    });
-
-    const request = new NextRequest("http://localhost/v1/admin/modules", {
-      method: "PATCH",
-      headers: { Authorization: "Bearer stlr_admin" },
-    });
-
-    const result = await requireAdminWriteAuth(request);
+    const result = await requirePublishAuth(publishRequest("/v1/publish/x"), required);
     expect(result).not.toBeInstanceOf(Response);
     expect(result).toHaveProperty("name", "test-key");
+  });
+
+  it.each([
+    [["providers:write"], "modules:write"],
+    [["modules:write"], "providers:write"],
+    [["modules:read", "providers:read"], "modules:write"],
+  ] as const)("a %j key is rejected when %s is required", async (granted, required) => {
+    mockValidateApiKey.mockResolvedValue({ ...MOCK_API_KEY, permissions: [...granted] });
+
+    const result = await requirePublishAuth(publishRequest("/v1/publish/x"), required);
+    expect((result as Response).status).toBe(403);
   });
 });

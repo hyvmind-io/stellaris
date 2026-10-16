@@ -9,7 +9,8 @@ import {
   validationError,
 } from "@/lib/api/errors";
 import { etagResponse } from "@/lib/api/response";
-import { requireAdminWriteAuth } from "@/lib/auth/middleware";
+import { requirePublishAuth } from "@/lib/auth/middleware";
+import { PERMISSIONS } from "@/lib/permissions";
 import { buildProviderAuditMetadata, writeAuditLog } from "@/lib/data/audit";
 import { isUniqueConstraintError } from "@/lib/data/errors";
 import { findProvider, saveProvider } from "@/lib/data/providers";
@@ -290,7 +291,7 @@ async function createVersionJson(
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    const auth = await requireAdminWriteAuth(request);
+    const auth = await requirePublishAuth(request, PERMISSIONS.PROVIDERS_WRITE);
     if (auth instanceof Response) return auth;
 
     const parsedParams = routeParamsSchema.safeParse(await params);

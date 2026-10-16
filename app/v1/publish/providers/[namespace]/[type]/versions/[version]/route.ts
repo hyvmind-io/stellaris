@@ -12,7 +12,8 @@ import {
 } from "@/lib/api/errors";
 import { parseRequiredIfMatch } from "@/lib/api/etag";
 import { etagResponse, noContentResponse } from "@/lib/api/response";
-import { requireAdminWriteAuth, requireAuth } from "@/lib/auth/middleware";
+import { requireAuth, requirePublishAuth } from "@/lib/auth/middleware";
+import { PERMISSIONS } from "@/lib/permissions";
 import { buildProviderAuditMetadata, writeAuditLog } from "@/lib/data/audit";
 import { deleteProviderAliasesByTarget } from "@/lib/data/aliases";
 import {
@@ -89,7 +90,7 @@ async function buildProviderVersionResponse(
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    const auth = await requireAuth(request, "admin");
+    const auth = await requireAuth(request, PERMISSIONS.PROVIDERS_WRITE);
     if (auth instanceof Response) return auth;
 
     const parsedParams = routeParamsSchema.safeParse(await params);
@@ -118,7 +119,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
-    const auth = await requireAdminWriteAuth(request);
+    const auth = await requirePublishAuth(request, PERMISSIONS.PROVIDERS_WRITE);
     if (auth instanceof Response) return auth;
 
     const parsedParams = routeParamsSchema.safeParse(await params);
@@ -205,7 +206,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    const auth = await requireAdminWriteAuth(request);
+    const auth = await requirePublishAuth(request, PERMISSIONS.PROVIDERS_WRITE);
     if (auth instanceof Response) return auth;
 
     const parsedParams = routeParamsSchema.safeParse(await params);

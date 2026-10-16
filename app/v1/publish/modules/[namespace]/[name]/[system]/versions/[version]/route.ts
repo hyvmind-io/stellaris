@@ -23,7 +23,7 @@ import {
   RevisionConflictError,
 } from "@/lib/data/concurrency";
 import { isImmutableUploadsEnabled } from "@/lib/data/settings";
-import { requireAuth, requireAdminWriteAuth } from "@/lib/auth/middleware";
+import { requireAuth, requirePublishAuth } from "@/lib/auth/middleware";
 import { PERMISSIONS } from "@/lib/permissions";
 import { writeAuditLog, buildModuleAuditMetadata } from "@/lib/data/audit";
 import { deleteModuleAliasesByTarget } from "@/lib/data/aliases";
@@ -60,11 +60,11 @@ function serializeModule(module: Module) {
 }
 
 /**
- * GET /v1/admin/modules/:namespace/:name/:system/versions/:version
+ * GET /v1/publish/modules/:namespace/:name/:system/versions/:version
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    const auth = await requireAuth(request, PERMISSIONS.ADMIN);
+    const auth = await requireAuth(request, PERMISSIONS.MODULES_WRITE);
     if (auth instanceof Response) return auth;
 
     const parsed = modulePublishParams.safeParse(await params);
@@ -86,11 +86,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 }
 
 /**
- * PATCH /v1/admin/modules/:namespace/:name/:system/versions/:version
+ * PATCH /v1/publish/modules/:namespace/:name/:system/versions/:version
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
-    const auth = await requireAdminWriteAuth(request);
+    const auth = await requirePublishAuth(request, PERMISSIONS.MODULES_WRITE);
     if (auth instanceof Response) return auth;
 
     const parsed = modulePublishParams.safeParse(await params);
@@ -155,7 +155,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 }
 
 /**
- * PUT /v1/admin/modules/:namespace/:name/:system/versions/:version
+ * PUT /v1/publish/modules/:namespace/:name/:system/versions/:version
  *
  * Replace an EXISTING module version's tarball bytes (and optional metadata).
  * This is the byte-overwrite path used by CI to re-push a version.
@@ -172,7 +172,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
  */
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
-    const auth = await requireAdminWriteAuth(request);
+    const auth = await requirePublishAuth(request, PERMISSIONS.MODULES_WRITE);
     if (auth instanceof Response) return auth;
 
     const parsed = modulePublishParams.safeParse(await params);
@@ -358,11 +358,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 }
 
 /**
- * DELETE /v1/admin/modules/:namespace/:name/:system/versions/:version
+ * DELETE /v1/publish/modules/:namespace/:name/:system/versions/:version
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    const auth = await requireAdminWriteAuth(request);
+    const auth = await requirePublishAuth(request, PERMISSIONS.MODULES_WRITE);
     if (auth instanceof Response) return auth;
 
     const parsed = modulePublishParams.safeParse(await params);

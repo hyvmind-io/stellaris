@@ -9,7 +9,8 @@ import {
   validationError,
 } from "@/lib/api/errors";
 import { etagResponse } from "@/lib/api/response";
-import { requireAdminWriteAuth } from "@/lib/auth/middleware";
+import { requirePublishAuth } from "@/lib/auth/middleware";
+import { PERMISSIONS } from "@/lib/permissions";
 import { findModule, resolveModuleTags, saveModule } from "@/lib/data/modules";
 import { writeAuditLog, buildModuleAuditMetadata } from "@/lib/data/audit";
 import { isUniqueConstraintError } from "@/lib/data/errors";
@@ -40,11 +41,11 @@ function serializeModule(module: Module) {
 }
 
 /**
- * POST /v1/admin/modules/:namespace/:name/:system/versions
+ * POST /v1/publish/modules/:namespace/:name/:system/versions
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    const auth = await requireAdminWriteAuth(request);
+    const auth = await requirePublishAuth(request, PERMISSIONS.MODULES_WRITE);
     if (auth instanceof Response) return auth;
 
     const parsedParams = moduleVersionsParams.safeParse(await params);

@@ -1,9 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
-vi.mock("@/lib/auth/middleware", () => ({
-  requireAdminWriteAuth: vi.fn(),
-}));
+vi.mock("@/lib/auth/middleware", () => ({ requireAuth: vi.fn() }));
 
 vi.mock("@/lib/validation/admin", () => ({
   createProviderAliasBody: {
@@ -22,14 +20,14 @@ vi.mock("@/lib/data/audit", () => ({
 }));
 
 import { POST } from "@/app/v1/admin/providers/aliases/route";
-import { requireAdminWriteAuth } from "@/lib/auth/middleware";
+import { requireAuth } from "@/lib/auth/middleware";
 import { createProviderAliasBody } from "@/lib/validation/admin";
 import {
   createProviderAlias,
   validateProviderAliasCreateConstraints,
 } from "@/lib/data/aliases";
 
-const mockRequireAdminWriteAuth = vi.mocked(requireAdminWriteAuth);
+const mockRequireAuth = vi.mocked(requireAuth);
 const mockCreateProviderAliasBody = vi.mocked(createProviderAliasBody);
 const mockCreateProviderAlias = vi.mocked(createProviderAlias);
 const mockValidateProviderAliasCreateConstraints = vi.mocked(
@@ -40,7 +38,7 @@ describe("POST /v1/admin/providers/aliases", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockRequireAdminWriteAuth.mockResolvedValue({
+    mockRequireAuth.mockResolvedValue({
       id: 1,
       name: "admin-key",
       permissions: ["admin"],

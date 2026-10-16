@@ -28,7 +28,7 @@ export default defineConfig({
   ],
   // The seed runs before the server so the dev bindings open a fresh database.
   webServer: {
-    command: `pnpm test:e2e:seed && pnpm exec next dev --turbopack --port ${E2E_PORT}`,
+    command: `node_modules/.bin/tsx --conditions=react-server e2e/seed.ts && node_modules/.bin/next dev --turbopack --port ${E2E_PORT}`,
     url: `${baseURL}/health`,
     reuseExistingServer: false,
     timeout: 180_000,
@@ -37,6 +37,9 @@ export default defineConfig({
       NEXT_PUBLIC_APP_URL: baseURL,
       PRIVATE_REGISTRY: "true",
       CF_ACCESS_AUTH_ENABLED: "false",
+      // R2 via the dev platform proxy rejects unknown-length upload streams.
+      // Publish specs delete the versions they create (files only; dirs remain).
+      STORAGE_BACKEND: "local",
     },
   },
 });
