@@ -368,6 +368,7 @@ curl -X POST https://stellaris.example.com/v1/api-keys \
 | `pnpm test`            | Run tests with Vitest                                           |
 | `pnpm test:ui`         | Run tests with Vitest UI                                        |
 | `pnpm test:coverage`   | Run tests with coverage report                                  |
+| `pnpm test:e2e`        | Playwright browser suite against a seeded local D1 (see CONTRIBUTING) |
 | `pnpm lint`            | Lint with ESLint                                                |
 | `pnpm type-check`      | TypeScript type checking                                        |
 | `pnpm db:generate`     | Generate Drizzle migrations from schema                         |

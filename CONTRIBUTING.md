@@ -80,6 +80,21 @@ pnpm test:coverage
 
 Tests use [Vitest](https://vitest.dev/) with [happy-dom](https://github.com/nicedoc/happy-dom) for DOM emulation. Test files live in the `__tests__/` directory, mirroring the source structure.
 
+### End-to-end tests
+
+```bash
+# One-time: install the Playwright browser
+pnpm exec playwright install chromium
+
+# Rebuild the e2e database, start `next dev` on :3100, run the browser suite
+pnpm test:e2e
+
+# Only rebuild the e2e database (.wrangler/e2e)
+pnpm test:e2e:seed
+```
+
+Specs live in `e2e/`. Each run wipes and reseeds an isolated local D1 database (`.wrangler/e2e`, configured by `e2e/wrangler.e2e.jsonc`) from `e2e/fixtures.ts`, so your own `.wrangler/state` data is never touched. The suite signs in as a seeded admin, then checks module/provider browse pages, pagination, home stats and search. Full-page screenshots for visual review are written next to each test's results in `test-results/`; open the HTML report with `pnpm exec playwright show-report`. Port 3100 must be free.
+
 ### Type checking
 
 ```bash

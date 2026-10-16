@@ -17,6 +17,10 @@ dist/
 .wrangler/
 *.d.ts.map
 
+# Playwright
+test-results/
+playwright-report/
+
 # Environment (standard Next.js pattern)
 .env*.local
 .dev.vars
