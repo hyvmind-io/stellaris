@@ -1,0 +1,21 @@
+{
+  // Local-only bindings for Playwright runs. State lives in .wrangler/e2e,
+  // isolated from the developer's own local D1 (.wrangler/state).
+  "name": "stellaris-e2e",
+  "compatibility_date": "2024-12-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "stellaris-db",
+      "database_id": "00000000-0000-0000-0000-00000000e2e0",
+      "migrations_dir": "../drizzle"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MODULES_STORAGE",
+      "bucket_name": "stellaris-modules-e2e"
+    }
+  ]
+}

@@ -15,6 +15,8 @@ pnpm test -- path/to/file.test.ts        # Run single test file
 pnpm test -- -t "test name"              # Run single test by name
 pnpm test:coverage    # Coverage (v8)
 pnpm test:ui          # Vitest UI
+pnpm test:e2e         # Playwright e2e: reseeds .wrangler/e2e, runs next dev on :3100
+pnpm test:e2e:seed    # Rebuild the isolated e2e D1 database only
 
 # Cloudflare
 pnpm preview          # Build + local Workers preview

@@ -33,6 +33,15 @@ const nextConfig: NextConfig = {
 
 export default nextConfig;
 
-// Enable Cloudflare bindings during local development
+// `next dev` only: wire D1/R2 bindings from wrangler. Playwright sets
+// STELLARIS_E2E=1 to use the seeded, isolated e2e database instead.
 import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
-initOpenNextCloudflareForDev();
+import { E2E_PERSIST_DIR, E2E_WRANGLER_CONFIG } from "./e2e/config";
+initOpenNextCloudflareForDev(
+  process.env.STELLARIS_E2E === "1"
+    ? {
+        configPath: E2E_WRANGLER_CONFIG,
+        persist: { path: `${E2E_PERSIST_DIR}/v3` },
+      }
+    : undefined,
+);
