@@ -1,14 +1,14 @@
 # Publishing Guide
 
 This guide covers the end-to-end flow for publishing **modules** and
-**providers** to Stellaris from CI using only an admin API key and `curl`. It
+**providers** to Stellaris from CI using only a scoped API key and `curl`. It
 focuses on the operational shape of each flow; for the complete field-by-field
 contract, response bodies, and error codes, see the
 [API reference](API.md).
 
 ## Prerequisites
 
-- An admin API key (`stlr_...`). See [Authentication → API keys](authentication.md#api-keys-bearer).
+- An API key (`stlr_...`) with `modules:write` (modules) or `providers:write` (providers); `admin` also works. See [Authentication → API keys](authentication.md#api-keys-bearer).
 - The base URL of your registry, e.g. `https://stellaris.example.com`.
 - For providers: a built release with per-platform zips, a `SHA256SUMS` file, a
   detached GPG signature (`SHA256SUMS.sig`), and the public GPG key(s).
@@ -21,22 +21,24 @@ A module version is published in a single `multipart/form-data` request. The
 tarball is uploaded to R2 and metadata is stored in D1.
 
 ```bash
-curl -X POST https://stellaris.example.com/v1/modules/myorg/vpc/aws/1.0.0 \
+curl -sS -D - -X POST \
+  https://stellaris.example.com/v1/publish/modules/myorg/vpc/aws/versions \
   -H "Authorization: Bearer $KEY" \
   -F "module=@./module.tar.gz" \
+  -F "version=1.0.0" \
   -F "owner=platform-team" \
   -F 'tags=["aws"]'
+# → 201, response header: ETag: W/"1"
 ```
 
-- The `module` field is the only required field; it carries the `.tar.gz`
-  tarball.
+- `module` (the `.tar.gz` tarball) and `version` are required.
 - `tags` is sent as a single text field containing a JSON array.
 - Use the canonical `multi` keyword in the `system` path segment for
   multi-system modules.
+- The key needs `modules:write` (or `admin`).
 
-A successful publish returns `201`. See
-[API → Publish Module](API.md#publish-module) for all fields, size limits, and
-error codes.
+See [API → Publish Modules Endpoints](API.md#publish-modules-endpoints) for all
+fields, size limits, and error codes.
 
 ## Publishing a provider
 
@@ -60,11 +62,11 @@ flow:
 
 ```bash
 BASE=https://stellaris.example.com
-KEY=stlr_admin_key
+KEY=stlr_providers_write_key
 NS=evilcorp; TYPE=cloudflare; VER=5.19.1-beta.1
 
 curl -sS -D - -o /dev/null -X POST \
-  "$BASE/v1/admin/providers/$NS/$TYPE/versions" \
+  "$BASE/v1/publish/providers/$NS/$TYPE/versions" \
   -H "Authorization: Bearer $KEY" \
   -F "version=$VER" \
   -F 'protocols=["5.0"]' \
@@ -85,14 +87,14 @@ upload and use it in the next request.
 
 ```bash
 curl -sS -D - -o /dev/null -X PUT \
-  "$BASE/v1/admin/providers/$NS/$TYPE/versions/$VER/platforms/linux/amd64" \
+  "$BASE/v1/publish/providers/$NS/$TYPE/versions/$VER/platforms/linux/amd64" \
   -H "Authorization: Bearer $KEY" \
   -H 'If-Match: W/"1"' \
   -F "file=@./dist/terraform-provider-${TYPE}_${VER}_linux_amd64.zip"
 # → 200, response header: ETag: W/"2"
 
 curl -sS -D - -o /dev/null -X PUT \
-  "$BASE/v1/admin/providers/$NS/$TYPE/versions/$VER/platforms/darwin/arm64" \
+  "$BASE/v1/publish/providers/$NS/$TYPE/versions/$VER/platforms/darwin/arm64" \
   -H "Authorization: Bearer $KEY" \
   -H 'If-Match: W/"2"' \
   -F "file=@./dist/terraform-provider-${TYPE}_${VER}_darwin_arm64.zip"
@@ -106,7 +108,7 @@ release is published in one session or platform-by-platform.
 
 For the complete field lists, the alternative JSON mode (for externally-hosted
 artifacts), the GPG verification chain, and every error code, see
-[API → Admin Provider Byte Ingestion](API.md#admin-provider-byte-ingestion-multipart).
+[API → Provider Byte Ingestion](API.md#provider-byte-ingestion-multipart).
 
 ## Immutable uploads
 
@@ -136,14 +138,14 @@ Two endpoints replace bytes for an existing version. Both require `If-Match`:
 
 | Artifact | Endpoint |
 | --- | --- |
-| Provider platform | `PUT /v1/admin/providers/{namespace}/{type}/versions/{version}/platforms/{os}/{arch}` |
-| Module version | `PUT /v1/admin/modules/{namespace}/{name}/{system}/versions/{version}` |
+| Provider platform | `PUT /v1/publish/providers/{namespace}/{type}/versions/{version}/platforms/{os}/{arch}` |
+| Module version | `PUT /v1/publish/modules/{namespace}/{name}/{system}/versions/{version}` |
 
 The module byte-replace `PUT` is the module analogue of the per-platform provider
 upload — the CI re-push route. It validates `If-Match` and confirms the version
 exists (returning `404` if not — use the `POST .../versions` create path
 instead), then applies the immutable-uploads gate. See
-[API → Replace module version bytes](API.md#admin-provider-byte-ingestion-multipart)
+[API → Replace module version bytes](API.md#replace-module-version-bytes-multipartform-data)
 for the precise order of operations and error codes.
 
 To change the setting, an administrator toggles it through the admin settings.

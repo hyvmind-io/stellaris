@@ -18,24 +18,21 @@ Complete API documentation for the Stellaris private Terraform/OpenTofu registry
   - [Download Provider Zip](#download-provider-zip)
   - [SHA256SUMS](#sha256sums)
   - [SHA256SUMS Signature](#sha256sums-signature)
-- [Extended API — Modules](#extended-api--modules)
+- [Extended API — Modules](#extended-api-modules)
   - [List Modules](#list-modules)
   - [Get Latest Module Version](#get-latest-module-version)
   - [Get Module Version](#get-module-version)
-  - [Publish Module](#publish-module)
-  - [Delete Module Version](#delete-module-version)
-- [Extended API — Providers](#extended-api--providers)
+- [Extended API — Providers](#extended-api-providers)
   - [List Providers](#list-providers)
   - [Get Provider Version](#get-provider-version)
-  - [Publish Provider](#publish-provider)
-  - [Delete Provider Version](#delete-provider-version)
-- [Admin API — Registry CRUD](#admin-api--registry-crud)
-  - [Admin Contract Baseline](#admin-contract-baseline)
+- [Publish API](#publish-api)
+  - [Publish Contract Baseline](#publish-contract-baseline)
   - [Optimistic Concurrency (`If-Match`)](#optimistic-concurrency-if-match)
-  - [Admin Modules Endpoints](#admin-modules-endpoints)
-  - [Admin Providers Endpoints](#admin-providers-endpoints)
-  - [Alias Behavior](#alias-behavior)
+  - [Publish Modules Endpoints](#publish-modules-endpoints)
+  - [Publish Providers Endpoints](#publish-providers-endpoints)
   - [Hard Delete Cleanup Contract](#hard-delete-cleanup-contract)
+- [Admin API](#admin-api)
+  - [Alias Behavior](#alias-behavior)
 - [API Keys](#api-keys)
   - [Create API Key](#create-api-key)
   - [List API Keys](#list-api-keys)
@@ -54,7 +51,7 @@ API keys use the format `stlr_` followed by 40 hexadecimal characters. Keys are 
 
 Both `Bearer <key>` and raw `<key>` formats are accepted in the `Authorization` header.
 
-Admin endpoints under `/v1/admin/...` also require a valid API key with `admin` permission.
+Publishing lives under `/v1/publish/...` and needs the resource's write scope: `/v1/publish/modules/...` requires `modules:write`, `/v1/publish/providers/...` requires `providers:write`. Everything under `/v1/admin/...` (aliases, settings) and `/v1/api-keys` requires `admin`. An `admin` key satisfies every scope.
 
 **Bootstrap mode:** When no API keys exist in the database, the `POST /v1/api-keys` endpoint allows unauthenticated access to create the first key.
 
@@ -581,106 +578,9 @@ Return metadata for a specific module version.
 
 ---
 
-### Publish Module
+### Publishing and Deleting Modules
 
-```
-POST /v1/modules/:namespace/:name/:system/:version
-```
-
-Publish a new module version. The module tarball is uploaded to R2 and metadata is stored in D1.
-
-**Authentication:** Required
-
-**Path Parameters:**
-
-| Parameter   | Type   | Description              | Validation              |
-| ----------- | ------ | ------------------------ | ----------------------- |
-| `namespace` | string | Module namespace         | 1-64 chars, `[a-z0-9-]` |
-| `name`      | string | Module name              | 1-64 chars, `[a-z0-9-]` |
-| `system`    | string | Target system / provider | 1-64 chars, `[a-z0-9-]` |
-| `version`   | string | Semver version           | Strict semver           |
-
-**Request Body:** `multipart/form-data`
-
-| Field    | Type   | Required | Description                                                             |
-| -------- | ------ | -------- | ----------------------------------------------------------------------- |
-| `module` | file   | **Yes**  | Module tarball (`.tar.gz`), max **50 MB**                               |
-| `owner`  | string | No       | Owner identifier (defaults to empty string)                             |
-| `tags`   | string | No       | JSON array string of provider/system tags (e.g., `"[\"aws\",\"gcp\"]"`) |
-
-`tags` must be sent as a multipart text field containing JSON (not as repeated fields). Example value: `-F 'tags=["aws","gcp"]'`.
-
-**Example (single-system):**
-
-```bash
-curl -X POST https://stellaris.example.com/v1/modules/myorg/vpc/aws/1.0.0 \
-  -H "Authorization: Bearer stlr_your_api_key" \
-  -F "module=@./module.tar.gz" \
-  -F "owner=platform-team" \
-  -F 'tags=["aws"]'
-```
-
-**Example (multi-system with canonical `multi` keyword):**
-
-```bash
-curl -X POST https://stellaris.example.com/v1/modules/myorg/vpc/multi/1.0.0 \
-  -H "Authorization: Bearer stlr_your_api_key" \
-  -F "module=@./module.tar.gz" \
-  -F "owner=platform-team" \
-  -F 'tags=["aws","gcp"]'
-```
-
-**Response** (`201`):
-
-```json
-{
-  "id": "myorg/vpc/aws/1.0.0",
-  "namespace": "myorg",
-  "name": "vpc",
-  "provider": "aws",
-  "version": "1.0.0",
-  "owner": "platform-team",
-  "published_at": "2026-02-18T12:00:00.000Z",
-  "downloads": 0,
-  "tags": ["aws"]
-}
-```
-
-**Error Responses:**
-
-- `400` — Missing `module` file in form data, or tarball exceeds 50 MB size limit
-- `401` — Missing or invalid API key
-- `409` — Module version already exists
-- `422` — Invalid path parameters
-
----
-
-### Delete Module Version
-
-```
-DELETE /v1/modules/:namespace/:name/:system/:version
-```
-
-Delete a specific module version. Removes the metadata from D1 and the tarball from R2.
-
-**Authentication:** Required
-
-**Path Parameters:** Same as [Publish Module](#publish-module).
-
-**Example:**
-
-```bash
-curl -X DELETE https://stellaris.example.com/v1/modules/myorg/vpc/aws/1.0.0 \
-  -H "Authorization: Bearer stlr_your_api_key"
-```
-
-**Response** (`204`): No content.
-
-**Error Responses:**
-
-- `401` — Missing or invalid API key
-- `404` — Module version not found
-- `422` — Invalid path parameters
+`POST` and `DELETE` on `/v1/modules/:namespace/:name/:system/:version` return `405`. Publish, replace, update and delete module versions through the [Publish API](#publish-modules-endpoints) with a `modules:write` key.
 
 ---
 
@@ -780,173 +680,26 @@ Return metadata for a specific provider version, including its available platfor
 
 ---
 
-### Publish Provider
+### Publishing and Deleting Providers
 
-```
-POST /v1/providers/:namespace/:type/:version
-```
-
-Publish a new provider version with platform binaries, SHA256 checksums, and GPG signing keys. All artifacts are uploaded to R2 and metadata is stored in D1 within a single transaction.
-
-Provider uploads do **not** support a `tags` field. To express compatibility, define each target in `data.platforms`.
-
-**Authentication:** Required
-
-**Path Parameters:**
-
-| Parameter   | Type   | Description        | Validation              |
-| ----------- | ------ | ------------------ | ----------------------- |
-| `namespace` | string | Provider namespace | 1-64 chars, `[a-z0-9-]` |
-| `type`      | string | Provider type      | 1-64 chars, `[a-z0-9-]` |
-| `version`   | string | Semver version     | Strict semver           |
-
-**Request Body:** `multipart/form-data`
-
-| Field            | Type          | Required               | Description                                                                                                                 |
-| ---------------- | ------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `data`           | string (JSON) | **Yes**                | Provider metadata (see schema below)                                                                                        |
-| `SHA256SUMS`     | file          | **Yes**                | SHA256 checksums file                                                                                                       |
-| `SHA256SUMS.sig` | file          | **Yes**                | GPG signature of the SHA256SUMS file                                                                                        |
-| `<filename>.zip` | file          | **Yes** (per platform) | Provider binary zip (max **64 MB** each) — one per platform, field name must match `filename` in the `data.platforms` array |
-
-**`data` field JSON schema:**
-
-```json
-{
-  "protocols": ["6.0"],
-  "platforms": [
-    {
-      "os": "linux",
-      "arch": "amd64",
-      "shasum": "abc123def456...",
-      "filename": "terraform-provider-custom_1.0.0_linux_amd64.zip"
-    }
-  ],
-  "gpg_public_keys": [
-    {
-      "key_id": "ABCD1234",
-      "ascii_armor": "-----BEGIN PGP PUBLIC KEY BLOCK-----\n...\n-----END PGP PUBLIC KEY BLOCK-----",
-      "source": "myorg",
-      "source_url": "https://myorg.example.com/keys"
-    }
-  ]
-}
-```
-
-| Field                           | Type     | Required | Description                                           |
-| ------------------------------- | -------- | -------- | ----------------------------------------------------- |
-| `protocols`                     | string[] | **Yes**  | Supported Terraform protocol versions (min 1)         |
-| `platforms`                     | object[] | **Yes**  | Platform entries (min 1)                              |
-| `platforms[].os`                | string   | **Yes**  | Operating system (e.g., `linux`, `darwin`, `windows`) |
-| `platforms[].arch`              | string   | **Yes**  | Architecture (e.g., `amd64`, `arm64`, `386`)          |
-| `platforms[].shasum`            | string   | **Yes**  | SHA256 checksum of the zip file                       |
-| `platforms[].filename`          | string   | **Yes**  | Filename of the zip file (must match a form field)    |
-| `gpg_public_keys`               | object[] | **Yes**  | GPG signing keys (min 1)                              |
-| `gpg_public_keys[].key_id`      | string   | **Yes**  | GPG key ID                                            |
-| `gpg_public_keys[].ascii_armor` | string   | **Yes**  | ASCII-armored GPG public key                          |
-| `gpg_public_keys[].source`      | string   | No       | Key source (defaults to empty string)                 |
-| `gpg_public_keys[].source_url`  | string   | No       | URL to the key source                                 |
-
-**Example:**
-
-```bash
-curl -X POST https://stellaris.example.com/v1/providers/myorg/custom/1.0.0 \
-  -H "Authorization: Bearer stlr_your_api_key" \
-  -F 'data={
-    "protocols": ["6.0"],
-    "platforms": [
-      {
-        "os": "linux",
-        "arch": "amd64",
-        "shasum": "abc123...",
-        "filename": "terraform-provider-custom_1.0.0_linux_amd64.zip"
-      }
-    ],
-    "gpg_public_keys": [
-      {
-        "key_id": "ABCD1234",
-        "ascii_armor": "-----BEGIN PGP PUBLIC KEY BLOCK-----\n...\n-----END PGP PUBLIC KEY BLOCK-----",
-        "source": "myorg"
-      }
-    ]
-  }' \
-  -F "terraform-provider-custom_1.0.0_linux_amd64.zip=@./terraform-provider-custom_1.0.0_linux_amd64.zip" \
-  -F "SHA256SUMS=@./SHA256SUMS" \
-  -F "SHA256SUMS.sig=@./SHA256SUMS.sig"
-```
-
-**Response** (`201`):
-
-```json
-{
-  "id": "myorg/custom/1.0.0",
-  "namespace": "myorg",
-  "type": "custom",
-  "version": "1.0.0",
-  "protocols": ["6.0"],
-  "platforms": [{ "os": "linux", "arch": "amd64" }],
-  "published_at": "2026-02-18T12:00:00.000Z"
-}
-```
-
-**Error Responses:**
-
-- `400` — Missing required files, invalid JSON in `data` field, or zip exceeds 64 MB size limit
-- `401` — Missing or invalid API key
-- `409` — Provider version already exists
-- `422` — Validation error in `data` field or path parameters
+`POST` and `DELETE` on `/v1/providers/:namespace/:type/:version` return `405`. Publish, update, upload platforms for and delete provider versions through the [Publish API](#publish-providers-endpoints) with a `providers:write` key.
 
 ---
 
-### Delete Provider Version
+## Publish API
 
-```
-DELETE /v1/providers/:namespace/:type/:version
-```
+Create, read (with revision), replace, update and delete module and provider versions. These are the endpoints CI uses to publish.
 
-Delete a specific provider version. Removes the metadata from D1 (cascade-deletes platforms and GPG keys) and all associated artifacts from R2 (zip files, SHA256SUMS, SHA256SUMS.sig).
+### Publish Contract Baseline
 
-**Authentication:** Required
-
-**Path Parameters:**
-
-| Parameter   | Type   | Description        | Validation              |
-| ----------- | ------ | ------------------ | ----------------------- |
-| `namespace` | string | Provider namespace | 1-64 chars, `[a-z0-9-]` |
-| `type`      | string | Provider type      | 1-64 chars, `[a-z0-9-]` |
-| `version`   | string | Semver version     | Strict semver           |
-
-**Example:**
-
-```bash
-curl -X DELETE https://stellaris.example.com/v1/providers/myorg/custom/1.0.0 \
-  -H "Authorization: Bearer stlr_your_api_key"
-```
-
-**Response** (`204`): No content.
-
-**Error Responses:**
-
-- `401` — Missing or invalid API key
-- `404` — Provider version not found
-- `422` — Invalid path parameters
-
----
-
-## Admin API — Registry CRUD
-
-These endpoints provide admin-only CRUD and alias operations for registry metadata. They are API-first contracts intended for cURL/operator tooling and UI workflows.
-
-### Admin Contract Baseline
-
-- Base path: `/v1/admin/...`
-- Authorization: Bearer API key with `admin` permission
+- Base path: `/v1/publish/...`
+- Authorization: Bearer API key with `modules:write` (`/v1/publish/modules/...`) or `providers:write` (`/v1/publish/providers/...`); `admin` satisfies both
 - Auditability: every successful write is expected to emit an immutable audit record
-- Error profile: `401` unauthenticated, `403` unauthorized, `404` not found, `409` conflict, `422` validation
+- Error profile: `401` unauthenticated, `403` missing scope, `404` not found, `409` conflict, `412` stale `If-Match`, `428` missing `If-Match`, `422` validation
 
 ### Optimistic Concurrency (`If-Match`)
 
-Admin mutable resources expose a `revision` value. Clients must:
+Publish resources expose a `revision` value (returned as a weak `ETag`, e.g. `W/"3"`). Clients must:
 
 1. Read current state (`GET`) and capture `revision`
 2. Send `If-Match: <revision>` on required write operations
@@ -954,33 +707,58 @@ Admin mutable resources expose a `revision` value. Clients must:
 
 **Required `If-Match` operations:**
 
-- Module `PATCH` and `DELETE`
+- Module `PUT`, `PATCH` and `DELETE`
 - Provider `PATCH`, `DELETE`, and platform `PUT`
 
 `If-Match` is mandatory for those endpoints. Missing or stale revisions are rejected with conflict semantics.
 
-### Admin Modules Endpoints
+### Publish Modules Endpoints
 
-| Operation           | Method + Path                                                             | Concurrency Requirement |
-| ------------------- | ------------------------------------------------------------------------- | ----------------------- |
-| Create version      | `POST /v1/admin/modules/{namespace}/{name}/{system}/versions`             | Not required            |
-| Get admin version   | `GET /v1/admin/modules/{namespace}/{name}/{system}/versions/{version}`    | Not required            |
-| Update version      | `PATCH /v1/admin/modules/{namespace}/{name}/{system}/versions/{version}`  | `If-Match` required     |
-| Hard delete version | `DELETE /v1/admin/modules/{namespace}/{name}/{system}/versions/{version}` | `If-Match` required     |
-| Create alias        | `POST /v1/admin/modules/aliases`                                          | Not required            |
+| Operation             | Method + Path                                                               | Concurrency Requirement |
+| --------------------- | --------------------------------------------------------------------------- | ----------------------- |
+| Create version        | `POST /v1/publish/modules/{namespace}/{name}/{system}/versions`             | Not required            |
+| Get version + ETag    | `GET /v1/publish/modules/{namespace}/{name}/{system}/versions/{version}`    | Not required            |
+| Replace version bytes | `PUT /v1/publish/modules/{namespace}/{name}/{system}/versions/{version}`    | `If-Match` required     |
+| Update version        | `PATCH /v1/publish/modules/{namespace}/{name}/{system}/versions/{version}`  | `If-Match` required     |
+| Hard delete version   | `DELETE /v1/publish/modules/{namespace}/{name}/{system}/versions/{version}` | `If-Match` required     |
 
-### Admin Providers Endpoints
+#### Create module version — `multipart/form-data`
 
-| Operation                | Method + Path                                                                         | Concurrency Requirement |
-| ------------------------ | ------------------------------------------------------------------------------------- | ----------------------- |
-| Create version           | `POST /v1/admin/providers/{namespace}/{type}/versions`                                | Not required            |
-| Get admin version        | `GET /v1/admin/providers/{namespace}/{type}/versions/{version}`                       | Not required            |
-| Update version           | `PATCH /v1/admin/providers/{namespace}/{type}/versions/{version}`                     | `If-Match` required     |
-| Hard delete version      | `DELETE /v1/admin/providers/{namespace}/{type}/versions/{version}`                    | `If-Match` required     |
-| Upsert platform artifact | `PUT /v1/admin/providers/{namespace}/{type}/versions/{version}/platforms/{os}/{arch}` | `If-Match` required     |
-| Create alias             | `POST /v1/admin/providers/aliases`                                                    | Not required            |
+| Field         | Type          | Required | Description                                                             |
+| ------------- | ------------- | -------- | ----------------------------------------------------------------------- |
+| `module`      | file          | **Yes**  | Module tarball (`.tar.gz`), max **50 MB**                               |
+| `version`     | string        | **Yes**  | Semver version                                                          |
+| `owner`       | string        | No       | Owner identifier                                                        |
+| `description` | string        | No       | Module description                                                      |
+| `source`      | string        | No       | Source URL                                                              |
+| `tags`        | string (JSON) | No       | JSON array string of provider/system tags (e.g., `"[\"aws\",\"gcp\"]"`) |
 
-### Admin Provider Byte Ingestion (multipart)
+`tags` is one multipart text field containing JSON, not repeated fields. For a module that targets several systems, publish it under the `multi` system and list the systems in `tags`:
+
+```bash
+curl -sS -D - -X POST \
+  https://stellaris.example.com/v1/publish/modules/myorg/vpc/multi/versions \
+  -H "Authorization: Bearer stlr_modules_write_key" \
+  -F "module=@./module.tar.gz" \
+  -F "version=1.0.0" \
+  -F "owner=platform-team" \
+  -F 'tags=["aws","gcp"]'
+# → 201, header: ETag: W/"1"
+```
+
+**Error responses:** `400` missing/oversized `module` file or bad `tags` JSON · `401` unauthenticated · `403` key lacks `modules:write` · `409` version already exists · `422` validation failure.
+
+### Publish Providers Endpoints
+
+| Operation                | Method + Path                                                                           | Concurrency Requirement |
+| ------------------------ | --------------------------------------------------------------------------------------- | ----------------------- |
+| Create version           | `POST /v1/publish/providers/{namespace}/{type}/versions`                                | Not required            |
+| Get version + ETag       | `GET /v1/publish/providers/{namespace}/{type}/versions/{version}`                       | Not required            |
+| Update version           | `PATCH /v1/publish/providers/{namespace}/{type}/versions/{version}`                     | `If-Match` required     |
+| Hard delete version      | `DELETE /v1/publish/providers/{namespace}/{type}/versions/{version}`                    | `If-Match` required     |
+| Upsert platform artifact | `PUT /v1/publish/providers/{namespace}/{type}/versions/{version}/platforms/{os}/{arch}` | `If-Match` required     |
+
+### Provider Byte Ingestion (multipart)
 
 Both the create-version and platform-upsert endpoints accept **`multipart/form-data`** in addition to their existing `application/json` modes. The route branches on the `Content-Type` header. JSON mode remains the contract for externally-hosted artifacts (where each platform `location` points elsewhere); multipart mode ingests artifact bytes into R2.
 
@@ -989,7 +767,7 @@ Both the create-version and platform-upsert endpoints accept **`multipart/form-d
 #### Create version — `multipart/form-data` mode
 
 ```
-POST /v1/admin/providers/{namespace}/{type}/versions
+POST /v1/publish/providers/{namespace}/{type}/versions
 ```
 
 Creates the version row and uploads the version-level `SHA256SUMS` + `SHA256SUMS.sig` once. Platform zips are **not** uploaded here (size); the `platforms` list may be empty and is filled in by per-platform `PUT`s.
@@ -1010,7 +788,7 @@ When `SHA256SUMS`/`SHA256SUMS.sig` are provided, their R2 keys are applied to an
 #### Upsert platform artifact — `multipart/form-data` mode (primary byte path)
 
 ```
-PUT /v1/admin/providers/{namespace}/{type}/versions/{version}/platforms/{os}/{arch}
+PUT /v1/publish/providers/{namespace}/{type}/versions/{version}/platforms/{os}/{arch}
 ```
 
 Uploads one platform zip and upserts the platform row. **`If-Match` is required** (revision-based optimistic concurrency).
@@ -1030,7 +808,7 @@ The route computes the zip's SHA-256 (overridden by a matching `sha256sums` line
 #### Replace module version bytes — `multipart/form-data`
 
 ```
-PUT /v1/admin/modules/{namespace}/{name}/{system}/versions/{version}
+PUT /v1/publish/modules/{namespace}/{name}/{system}/versions/{version}
 ```
 
 Replaces an **existing** module version's tarball bytes (and optional metadata). This is the module analogue of the per-platform provider byte path — the CI re-push route. **`If-Match` is required.**
@@ -1057,17 +835,17 @@ Terraform/OpenTofu verifies a downloaded provider as follows, and the registry m
 
 The served `shasums_url` / `shasums_signature_url` are **version-level** (`.../sha256sums`, `.../sha256sums.sig`), backed by the fixed R2 keys `providers/{ns}/{type}/{version}/SHA256SUMS[.sig]` uploaded once at create-version time. They do not depend on the per-platform `shasum_url` columns. Per-platform byte replaces therefore preserve those columns rather than null them, so the GPG chain remains valid whether a release is published in one shot or platform-by-platform.
 
-#### End-to-end publish via curl (admin API key only)
+#### End-to-end publish via curl (`providers:write` API key only)
 
 ```bash
 BASE=https://stellaris.example.com
-KEY=stlr_admin_key
+KEY=stlr_providers_write_key
 NS=evilcorp; TYPE=cloudflare; VER=5.19.1-beta.1
 
 # 1) Create the version (multipart) — uploads SHA256SUMS + signature, no zips yet.
 #    Capture the ETag (revision) from the response headers.
 curl -sS -D - -o /dev/null -X POST \
-  "$BASE/v1/admin/providers/$NS/$TYPE/versions" \
+  "$BASE/v1/publish/providers/$NS/$TYPE/versions" \
   -H "Authorization: Bearer $KEY" \
   -F "version=$VER" \
   -F 'protocols=["5.0"]' \
@@ -1082,28 +860,19 @@ curl -sS -D - -o /dev/null -X POST \
 # 2) Upload each platform zip with the current revision via If-Match.
 #    Re-read the ETag after each PUT (revision bumps each time).
 curl -sS -D - -o /dev/null -X PUT \
-  "$BASE/v1/admin/providers/$NS/$TYPE/versions/$VER/platforms/linux/amd64" \
+  "$BASE/v1/publish/providers/$NS/$TYPE/versions/$VER/platforms/linux/amd64" \
   -H "Authorization: Bearer $KEY" \
   -H 'If-Match: W/"1"' \
   -F "file=@./dist/terraform-provider-${TYPE}_${VER}_linux_amd64.zip"
 # → 200, header: ETag: W/"2"
 
 curl -sS -D - -o /dev/null -X PUT \
-  "$BASE/v1/admin/providers/$NS/$TYPE/versions/$VER/platforms/darwin/arm64" \
+  "$BASE/v1/publish/providers/$NS/$TYPE/versions/$VER/platforms/darwin/arm64" \
   -H "Authorization: Bearer $KEY" \
   -H 'If-Match: W/"2"' \
   -F "file=@./dist/terraform-provider-${TYPE}_${VER}_darwin_arm64.zip"
 # → 200, header: ETag: W/"3"  (repeat for remaining platforms)
 ```
-
-### Alias Behavior
-
-- Rename behavior is implemented through alias creation endpoints only.
-- Old identifiers resolve to canonical resources through existing read/discovery paths:
-  - Modules: `GET /v1/modules/{namespace}/{name}/{system}/versions`
-  - Providers: `GET /v1/providers/{namespace}/{type}/versions`
-- Alias targets must be canonical identities.
-- Alias chains/loops are invalid and must be rejected.
 
 ### Hard Delete Cleanup Contract
 
@@ -1117,21 +886,43 @@ curl -sS -D - -o /dev/null -X PUT \
 ### Concurrency Example (`409` Recovery)
 
 ```bash
-# 1) Read current admin version and capture revision
-curl -sS \
-  -H "Authorization: Bearer stlr_admin_key" \
-  https://stellaris.example.com/v1/admin/modules/myorg/vpc/aws/versions/1.2.0
+# 1) Read the current version and capture its revision (ETag)
+curl -sS -D - \
+  -H "Authorization: Bearer stlr_modules_write_key" \
+  https://stellaris.example.com/v1/publish/modules/myorg/vpc/aws/versions/1.2.0
 
 # 2) Patch with If-Match
 curl -X PATCH \
-  -H "Authorization: Bearer stlr_admin_key" \
-  -H "If-Match: 42" \
+  -H "Authorization: Bearer stlr_modules_write_key" \
+  -H 'If-Match: W/"42"' \
   -H "Content-Type: application/json" \
   -d '{"deprecation":{"deprecated":true,"message":"Use 2.x"}}' \
-  https://stellaris.example.com/v1/admin/modules/myorg/vpc/aws/versions/1.2.0
+  https://stellaris.example.com/v1/publish/modules/myorg/vpc/aws/versions/1.2.0
 
 # 3) If response is 409, re-read and retry using latest revision
 ```
+
+---
+
+## Admin API
+
+Administrative endpoints only. Every route under `/v1/admin/...` requires a key with `admin` permission; `modules:write` and `providers:write` keys get `403`.
+
+| Operation                      | Method + Path                      |
+| ------------------------------ | ---------------------------------- |
+| Create module alias            | `POST /v1/admin/modules/aliases`   |
+| Create provider alias          | `POST /v1/admin/providers/aliases` |
+| Read upstream proxy settings   | `GET /v1/admin/settings/proxy`     |
+| Update upstream proxy settings | `PATCH /v1/admin/settings/proxy`   |
+
+### Alias Behavior
+
+- Rename behavior is implemented through alias creation endpoints only.
+- Old identifiers resolve to canonical resources through existing read/discovery paths:
+  - Modules: `GET /v1/modules/{namespace}/{name}/{system}/versions`
+  - Providers: `GET /v1/providers/{namespace}/{type}/versions`
+- Alias targets must be canonical identities.
+- Alias chains/loops are invalid and must be rejected.
 
 ---
 
@@ -1155,7 +946,7 @@ Create a new API key. The plaintext key is only returned in this response — st
 | ------------- | -------- | -------- | ----------------------------------------------------- |
 | `name`        | string   | **Yes**  | Human-readable name for the key                       |
 | `description` | string   | No       | Description of the key's purpose                      |
-| `permissions` | string[] | No       | Permission scopes (currently stored but not enforced) |
+| `permissions` | string[] | No       | Permission scopes: `admin`, `modules:read`, `modules:write`, `providers:read`, `providers:write`. Defaults to `["admin"]` |
 | `expires_at`  | string   | No       | Expiration date in ISO 8601 format                    |
 
 **Example (bootstrap — no auth needed):**
@@ -1178,7 +969,7 @@ curl -X POST https://stellaris.example.com/v1/api-keys \
   -d '{
     "name": "ci-pipeline",
     "description": "Key for CI/CD publishing",
-    "permissions": ["publish"],
+    "permissions": ["modules:write", "providers:write"],
     "expires_at": "2027-01-01T00:00:00.000Z"
   }'
 ```
@@ -1241,7 +1032,7 @@ curl https://stellaris.example.com/v1/api-keys \
       "id": 2,
       "name": "ci-pipeline",
       "description": "Key for CI/CD publishing",
-      "permissions": ["publish"],
+      "permissions": ["modules:write", "providers:write"],
       "created_at": "2026-02-18T13:00:00.000Z",
       "last_used_at": null,
       "expires_at": "2027-01-01T00:00:00.000Z"

@@ -23,7 +23,7 @@ can disable it so that only existing accounts can sign in.
 
 ## API keys (Bearer)
 
-All write operations — publishing, deleting, and API-key management — and every
+All write operations (publishing, deleting, API-key management) and every
 admin endpoint require an API key passed in the `Authorization` header:
 
 ```
@@ -36,8 +36,10 @@ Key facts:
 - Both `Bearer <key>` and a raw `<key>` value are accepted in the header.
 - Keys are hashed with SHA-256 before storage; the plaintext is shown only once,
   at creation time.
-- Endpoints under `/v1/admin/...` additionally require a key with `admin`
-  permission.
+- Publishing lives under `/v1/publish/...`: module routes require
+  `modules:write`, provider routes require `providers:write`.
+- Everything under `/v1/admin/...` (aliases, settings) and API-key management
+  (`/v1/api-keys`) requires `admin`. An `admin` key satisfies every scope.
 - **Bootstrap mode:** when no API keys exist yet, `POST /v1/api-keys` is allowed
   without authentication so the first key can be created. After that, normal
   auth applies.

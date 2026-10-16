@@ -1,10 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
-vi.mock("@/lib/auth/middleware", () => ({
-  requireAuth: vi.fn(),
-  requireAdminWriteAuth: vi.fn(),
-}));
+vi.mock("@/lib/auth/middleware", () => ({ requireAuth: vi.fn(), requirePublishAuth: vi.fn() }));
 
 vi.mock("@/lib/api/etag", () => ({
   parseRequiredIfMatch: vi.fn(),
@@ -46,8 +43,8 @@ vi.mock("@/lib/data/audit", () => ({
 import {
   PATCH,
   DELETE,
-} from "@/app/v1/admin/providers/[namespace]/[type]/versions/[version]/route";
-import { requireAdminWriteAuth } from "@/lib/auth/middleware";
+} from "@/app/v1/publish/providers/[namespace]/[type]/versions/[version]/route";
+import { requirePublishAuth } from "@/lib/auth/middleware";
 import { parseRequiredIfMatch } from "@/lib/api/etag";
 import { adminProviderUpdateBody } from "@/lib/validation/admin";
 import { conditionalProviderUpdate } from "@/lib/data/concurrency";
@@ -59,7 +56,7 @@ import {
 import { deleteProviderAliasesByTarget } from "@/lib/data/aliases";
 import { deleteByPrefix } from "@/lib/storage";
 
-const mockRequireAdminWriteAuth = vi.mocked(requireAdminWriteAuth);
+const mockRequirePublishAuth = vi.mocked(requirePublishAuth);
 const mockParseRequiredIfMatch = vi.mocked(parseRequiredIfMatch);
 const mockAdminProviderUpdateBody = vi.mocked(adminProviderUpdateBody);
 const mockConditionalProviderUpdate = vi.mocked(conditionalProviderUpdate);
@@ -71,10 +68,10 @@ const mockDeleteProviderAliasesByTarget = vi.mocked(
 );
 const mockDeleteByPrefix = vi.mocked(deleteByPrefix);
 
-describe("Admin provider version route", () => {
+describe("Publish provider version route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockRequireAdminWriteAuth.mockResolvedValue({ id: 1 } as never);
+    mockRequirePublishAuth.mockResolvedValue({ id: 1 } as never);
     mockParseRequiredIfMatch.mockReturnValue({ ok: true, revision: 2 });
     mockAdminProviderUpdateBody.safeParse.mockReturnValue({
       success: true,

@@ -7,7 +7,8 @@ import {
   validationError,
 } from "@/lib/api/errors";
 import { jsonResponse } from "@/lib/api/response";
-import { requireAdminWriteAuth } from "@/lib/auth/middleware";
+import { requireAuth } from "@/lib/auth/middleware";
+import { PERMISSIONS } from "@/lib/permissions";
 import { buildProviderAuditMetadata, writeAuditLog } from "@/lib/data/audit";
 import {
   createProviderAlias,
@@ -18,7 +19,7 @@ import { createProviderAliasBody } from "@/lib/validation/admin";
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireAdminWriteAuth(request);
+    const auth = await requireAuth(request, PERMISSIONS.ADMIN);
     if (auth instanceof Response) return auth;
 
     const rawBody = await request.json();

@@ -102,7 +102,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   void request;
   void params;
   return methodNotAllowed(
-    "Module publish is only available under /v1/admin/modules",
+    "Module publish is only available under /v1/publish/modules",
   );
 }
 
@@ -115,6 +115,6 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   void request;
   void params;
   return methodNotAllowed(
-    "Module deletes are only available under /v1/admin/modules",
+    "Module deletes are only available under /v1/publish/modules",
   );
 }

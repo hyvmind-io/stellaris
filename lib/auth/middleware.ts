@@ -65,19 +65,26 @@ export async function requireAuth(
   return apiKey;
 }
 
+export type PublishPermission =
+  | typeof PERMISSIONS.MODULES_WRITE
+  | typeof PERMISSIONS.PROVIDERS_WRITE;
+
 /**
- * Require admin permission for `/v1/admin` write contracts.
+ * Guard for `/v1/publish` writes. Requires the resource's write scope; `admin`
+ * keys pass via the wildcard in `requireAuth`. `/v1/admin` and `/v1/api-keys`
+ * stay behind `requireAuth(request, PERMISSIONS.ADMIN)`.
  */
-export async function requireAdminWriteAuth(
+export async function requirePublishAuth(
   request: NextRequest,
+  permission: PublishPermission,
 ): Promise<ApiKey | Response> {
   if (!MUTABLE_METHODS.has(request.method)) {
-    return forbidden("Admin write contract requires a mutable HTTP method");
+    return forbidden("Publish writes require a mutable HTTP method");
   }
 
-  if (!request.nextUrl.pathname.startsWith("/v1/admin/")) {
-    return forbidden("Admin write contract is only valid for /v1/admin routes");
+  if (!request.nextUrl.pathname.startsWith("/v1/publish/")) {
+    return forbidden("Publish writes are only valid for /v1/publish routes");
   }
 
-  return requireAuth(request, PERMISSIONS.ADMIN);
+  return requireAuth(request, permission);
 }

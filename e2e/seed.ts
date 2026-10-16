@@ -1,6 +1,7 @@
 /**
  * Rebuilds the isolated e2e D1 database: wipes .wrangler/e2e, applies every
- * drizzle migration, then inserts the fixture registry and a login user.
+ * drizzle migration, then inserts the fixture registry, a login user and
+ * scoped API keys.
  *
  * Run with: pnpm test:e2e:seed   (also runs before the Playwright dev server)
  */
@@ -9,8 +10,14 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { hashApiKey } from "@/lib/auth/api-keys";
 import { hashPassword } from "@/lib/auth/password";
-import { E2E_PERSIST_DIR, E2E_USER, E2E_WRANGLER_CONFIG } from "./config";
+import {
+  E2E_API_KEYS,
+  E2E_PERSIST_DIR,
+  E2E_USER,
+  E2E_WRANGLER_CONFIG,
+} from "./config";
 import { MODULES, PROVIDERS } from "./fixtures";
 
 const quote = (value: string | null) =>
@@ -84,6 +91,13 @@ async function buildSeedSql(): Promise<string> {
     `INSERT INTO users (email, username, password_hash, role, created_at, updated_at) VALUES (` +
       `${quote(E2E_USER.email)}, ${quote(E2E_USER.username)}, ${quote(await hashPassword(E2E_USER.password))}, 'admin', ${now}, ${now});`,
   );
+
+  for (const [name, { key, permissions }] of Object.entries(E2E_API_KEYS)) {
+    statements.push(
+      `INSERT INTO api_keys (key_hash, name, permissions, created_at) VALUES (` +
+        `${quote(await hashApiKey(key))}, ${quote(`e2e-${name}`)}, ${quote(JSON.stringify(permissions))}, ${now});`,
+    );
+  }
 
   return statements.join("\n") + "\n";
 }

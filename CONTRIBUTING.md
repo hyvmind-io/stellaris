@@ -93,7 +93,21 @@ pnpm test:e2e
 pnpm test:e2e:seed
 ```
 
-Specs live in `e2e/`. Each run wipes and reseeds an isolated local D1 database (`.wrangler/e2e`, configured by `e2e/wrangler.e2e.jsonc`) from `e2e/fixtures.ts`, so your own `.wrangler/state` data is never touched. The suite signs in as a seeded admin, then checks module/provider browse pages, pagination, home stats and search. Full-page screenshots for visual review are written next to each test's results in `test-results/`; open the HTML report with `pnpm exec playwright show-report`. Port 3100 must be free.
+Specs live in `e2e/`. Each run wipes and reseeds an isolated local D1 database (`.wrangler/e2e`, configured by `e2e/wrangler.e2e.jsonc`) from `e2e/fixtures.ts`, so your own `.wrangler/state` data is never touched. The suite signs in as a seeded admin and checks module/provider browse pages, pagination, home stats and search. `registry-scopes.spec.ts` uses seeded scoped API keys to check that `modules:write`/`providers:write` can publish only their own resource under `/v1/publish`, cannot use `/v1/admin` or `/v1/api-keys`, and that the old `/v1/admin` publish paths are gone. Uploads use the local filesystem backend (`.storage/`) because the dev R2 proxy rejects streamed uploads; the spec deletes what it publishes. Full-page screenshots for visual review are written next to each test's results in `test-results/`; open the HTML report with `pnpm exec playwright show-report`. Port 3100 must be free.
+
+### Documentation
+
+The docs site is MkDocs Material, configured in `mkdocs.yml` with sources in `docs/`. Tool versions are pinned in `docs/requirements.txt`.
+
+```bash
+# Build; --strict fails on broken links or anchors
+uvx --with-requirements docs/requirements.txt mkdocs build --strict
+
+# Live preview
+uvx --with-requirements docs/requirements.txt mkdocs serve
+```
+
+Record breaking API changes at the top of `docs/upgrading.md`.
 
 ### Type checking
 

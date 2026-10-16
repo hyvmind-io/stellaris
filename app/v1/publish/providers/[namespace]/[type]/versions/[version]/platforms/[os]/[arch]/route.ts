@@ -13,7 +13,8 @@ import {
 } from "@/lib/api/errors";
 import { parseRequiredIfMatch } from "@/lib/api/etag";
 import { etagResponse } from "@/lib/api/response";
-import { requireAdminWriteAuth } from "@/lib/auth/middleware";
+import { requirePublishAuth } from "@/lib/auth/middleware";
+import { PERMISSIONS } from "@/lib/permissions";
 import { buildProviderAuditMetadata, writeAuditLog } from "@/lib/data/audit";
 import { RevisionConflictError } from "@/lib/data/concurrency";
 import {
@@ -363,7 +364,7 @@ async function replacePlatformJson(
 
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
-    const auth = await requireAdminWriteAuth(request);
+    const auth = await requirePublishAuth(request, PERMISSIONS.PROVIDERS_WRITE);
     if (auth instanceof Response) return auth;
 
     const parsedParams = routeParamsSchema.safeParse(await params);

@@ -1,9 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
-vi.mock("@/lib/auth/middleware", () => ({
-  requireAdminWriteAuth: vi.fn(),
-}));
+vi.mock("@/lib/auth/middleware", () => ({ requirePublishAuth: vi.fn() }));
 
 vi.mock("@/lib/api/etag", () => ({
   parseRequiredIfMatch: vi.fn(),
@@ -50,8 +48,8 @@ vi.mock("@/lib/storage", () => ({
   deleteObject: vi.fn(),
 }));
 
-import { PUT } from "@/app/v1/admin/providers/[namespace]/[type]/versions/[version]/platforms/[os]/[arch]/route";
-import { requireAdminWriteAuth } from "@/lib/auth/middleware";
+import { PUT } from "@/app/v1/publish/providers/[namespace]/[type]/versions/[version]/platforms/[os]/[arch]/route";
+import { requirePublishAuth } from "@/lib/auth/middleware";
 import { parseRequiredIfMatch } from "@/lib/api/etag";
 import { adminProviderPlatformReplaceBody } from "@/lib/validation/admin";
 import {
@@ -68,7 +66,7 @@ import {
   deleteObject,
 } from "@/lib/storage";
 
-const mockRequireAdminWriteAuth = vi.mocked(requireAdminWriteAuth);
+const mockRequirePublishAuth = vi.mocked(requirePublishAuth);
 const mockParseRequiredIfMatch = vi.mocked(parseRequiredIfMatch);
 const mockAdminProviderPlatformReplaceBody = vi.mocked(
   adminProviderPlatformReplaceBody,
@@ -82,10 +80,10 @@ const mockUploadShasums = vi.mocked(uploadShasums);
 const mockUploadShasumsSignature = vi.mocked(uploadShasumsSignature);
 const mockDeleteObject = vi.mocked(deleteObject);
 
-describe("PUT /v1/admin/providers/.../platforms/:os/:arch", () => {
+describe("PUT /v1/publish/providers/.../platforms/:os/:arch", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockRequireAdminWriteAuth.mockResolvedValue({ id: 1 } as never);
+    mockRequirePublishAuth.mockResolvedValue({ id: 1 } as never);
     mockParseRequiredIfMatch.mockReturnValue({ ok: true, revision: 4 });
     mockAdminProviderPlatformReplaceBody.safeParse.mockReturnValue({
       success: true,
@@ -171,7 +169,7 @@ describe("PUT /v1/admin/providers/.../platforms/:os/:arch", () => {
   });
 });
 
-describe("PUT /v1/admin/providers/.../platforms (multipart byte path)", () => {
+describe("PUT /v1/publish/providers/.../platforms (multipart byte path)", () => {
   const params = {
     namespace: "hashicorp",
     type: "aws",
@@ -189,7 +187,7 @@ describe("PUT /v1/admin/providers/.../platforms (multipart byte path)", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockRequireAdminWriteAuth.mockResolvedValue({ id: 1 } as never);
+    mockRequirePublishAuth.mockResolvedValue({ id: 1 } as never);
     mockParseRequiredIfMatch.mockReturnValue({ ok: true, revision: 4 });
     mockFindProvider.mockResolvedValue({ id: 11 } as never);
     // Default: platform slot is empty (initial publish) — always allowed.

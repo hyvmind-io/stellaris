@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-vi.mock("@/lib/auth/middleware", () => ({
-  requireAuth: vi.fn(),
-  requireAdminWriteAuth: vi.fn(),
-}));
+vi.mock("@/lib/auth/middleware", () => ({ requireAuth: vi.fn(), requirePublishAuth: vi.fn() }));
 
 vi.mock("@/lib/data/modules", () => ({
   findModule: vi.fn(),
@@ -46,14 +43,14 @@ vi.mock("@/lib/data/aliases", () => ({
   deleteModuleAliasesByTarget: vi.fn(),
 }));
 
-import { requireAdminWriteAuth } from "@/lib/auth/middleware";
+import { requirePublishAuth } from "@/lib/auth/middleware";
 import { findModule } from "@/lib/data/modules";
 import { conditionalModuleReplaceBytes } from "@/lib/data/concurrency";
 import { isImmutableUploadsEnabled } from "@/lib/data/settings";
 import { uploadModuleTarball, deleteObject } from "@/lib/storage";
-import { PUT } from "@/app/v1/admin/modules/[namespace]/[name]/[system]/versions/[version]/route";
+import { PUT } from "@/app/v1/publish/modules/[namespace]/[name]/[system]/versions/[version]/route";
 
-const mockRequireAdminWriteAuth = vi.mocked(requireAdminWriteAuth);
+const mockRequirePublishAuth = vi.mocked(requirePublishAuth);
 const mockFindModule = vi.mocked(findModule);
 const mockReplaceBytes = vi.mocked(conditionalModuleReplaceBytes);
 const mockIsImmutable = vi.mocked(isImmutableUploadsEnabled);
@@ -98,10 +95,10 @@ function tarballForm() {
   return form;
 }
 
-describe("PUT /v1/admin/modules/.../versions/:version (replace bytes)", () => {
+describe("PUT /v1/publish/modules/.../versions/:version (replace bytes)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockRequireAdminWriteAuth.mockResolvedValue({
+    mockRequirePublishAuth.mockResolvedValue({
       id: 1,
       name: "ci-key",
     } as never);

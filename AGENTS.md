@@ -30,6 +30,10 @@ pnpm db:setup:remote  # Apply pending migrations to remote D1 (idempotent, wrang
 pnpm db:reset         # Reset local database (wipes .wrangler/ state)
 pnpm db:reset:remote  # Full reset of remote D1 (DESTRUCTIVE — drops all tables dynamically)
 pnpm db:studio        # Drizzle Studio
+
+# Docs (MkDocs Material; config in mkdocs.yml, pins in docs/requirements.txt)
+uvx --with-requirements docs/requirements.txt mkdocs build --strict   # must pass: broken links/anchors fail
+uvx --with-requirements docs/requirements.txt mkdocs serve            # live preview
 ```
 
 ## Tech Stack
@@ -52,6 +56,9 @@ app/
   health/                      — Health check endpoint
   v1/modules/                  — Terraform Module Registry Protocol API
   v1/providers/                — Terraform Provider Registry Protocol API
+  v1/publish/                  — Publish API: module/provider version writes (`:write` scopes)
+  v1/admin/                    — Admin API: aliases, settings (`admin` only)
+  v1/api-keys/                 — API key management (`admin` only)
   modules/                     — Browse UI pages (SSR)
   providers/                   — Browse UI pages (SSR)
   layout.tsx                   — Root layout with ThemeProvider
@@ -114,6 +121,30 @@ lib/
 - Use `lib/api/response.ts` helpers for success responses (`jsonResponse`, `binaryResponse`, `noContentResponse`).
 - Wrap handler body in try/catch; log errors with `console.error`; return `internalError()`.
 - Route params type: `type RouteParams = { params: Promise<{ ... }> }`.
+
+### API Key Scopes (`/v1` auth)
+
+Scopes live in `lib/permissions.ts` (`PERMISSIONS`). `requireAuth` (`lib/auth/middleware.ts`) treats `admin` as a wildcard: an `admin` key passes any scope check.
+
+The URL prefix decides the scope. Never put a non-admin route under `/v1/admin/`, and never put an admin-only route under `/v1/publish/`.
+
+| Route family | Guard to call | Scope required |
+|---|---|---|
+| Protocol reads: `/v1/modules/...` | `requireAuth(request, PERMISSIONS.MODULES_READ)` | `modules:read` |
+| Protocol reads: `/v1/providers/...` | `requireAuth(request, PERMISSIONS.PROVIDERS_READ)` | `providers:read` |
+| Module writes: `POST/PUT/PATCH/DELETE /v1/publish/modules/...` | `requirePublishAuth(request, PERMISSIONS.MODULES_WRITE)` | `modules:write` |
+| Provider writes: `POST/PUT/PATCH/DELETE /v1/publish/providers/...` (versions, platforms) | `requirePublishAuth(request, PERMISSIONS.PROVIDERS_WRITE)` | `providers:write` |
+| Version read with ETag: `GET /v1/publish/{modules,providers}/.../versions/:version` | `requireAuth(request, PERMISSIONS.<RESOURCE>_WRITE)` | matching `:write` |
+| Everything under `/v1/admin/...` (aliases, settings) and `/v1/api-keys` | `requireAuth(request, PERMISSIONS.ADMIN)` | `admin` only |
+
+Rules:
+
+- Publishing and deleting registry content MUST NOT require `admin`. It lives under `/v1/publish/` and uses the resource's `:write` scope.
+- Anything that can mint or change keys, create aliases, manage users, or change system settings MUST require `admin` and lives under `/v1/admin/` or `/v1/api-keys`. A `:write` key must never be able to escalate.
+- `requirePublishAuth` rejects non-mutating methods and any path outside `/v1/publish/`. Use it only for publish writes.
+- `POST`/`DELETE` on the protocol paths (`/v1/modules/.../:version`, `/v1/providers/.../:version`) intentionally return `405` pointing at `/v1/publish`. Do not add write handlers there.
+- Route unit tests mock the middleware, so they cannot catch a wrong scope. `e2e/registry-scopes.spec.ts` covers scopes and the prefix boundary end to end with seeded keys (`E2E_API_KEYS` in `e2e/config.ts`). When you add or move a route, or change a guard, extend that spec.
+- A breaking API change gets an entry at the top of `docs/upgrading.md` (old → new mapping, migration steps), plus updates to `docs/API.md` and this section.
 
 ### Components
 

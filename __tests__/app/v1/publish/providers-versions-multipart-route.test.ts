@@ -1,9 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
-vi.mock("@/lib/auth/middleware", () => ({
-  requireAdminWriteAuth: vi.fn(),
-}));
+vi.mock("@/lib/auth/middleware", () => ({ requirePublishAuth: vi.fn() }));
 
 vi.mock("@/lib/data/providers", () => ({
   findProvider: vi.fn(),
@@ -28,21 +26,21 @@ vi.mock("@/lib/storage", () => ({
 // NOTE: validation schemas are NOT mocked here — the multipart create path
 // exercises the real `adminProviderCreateMultipartBody` schema.
 
-import { POST } from "@/app/v1/admin/providers/[namespace]/[type]/versions/route";
-import { requireAdminWriteAuth } from "@/lib/auth/middleware";
+import { POST } from "@/app/v1/publish/providers/[namespace]/[type]/versions/route";
+import { requirePublishAuth } from "@/lib/auth/middleware";
 import { findProvider, saveProvider } from "@/lib/data/providers";
 import { uploadShasums, uploadShasumsSignature } from "@/lib/storage";
 
-const mockRequireAdminWriteAuth = vi.mocked(requireAdminWriteAuth);
+const mockRequirePublishAuth = vi.mocked(requirePublishAuth);
 const mockFindProvider = vi.mocked(findProvider);
 const mockSaveProvider = vi.mocked(saveProvider);
 const mockUploadShasums = vi.mocked(uploadShasums);
 const mockUploadShasumsSignature = vi.mocked(uploadShasumsSignature);
 
-describe("POST /v1/admin/providers/:namespace/:type/versions (multipart)", () => {
+describe("POST /v1/publish/providers/:namespace/:type/versions (multipart)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockRequireAdminWriteAuth.mockResolvedValue({ id: 1 } as never);
+    mockRequirePublishAuth.mockResolvedValue({ id: 1 } as never);
     mockFindProvider.mockResolvedValue(undefined);
     mockSaveProvider.mockResolvedValue({ revision: 1 } as never);
     mockUploadShasums.mockResolvedValue(

@@ -88,7 +88,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   void request;
   void params;
   return methodNotAllowed(
-    "Provider publish is only available under /v1/admin/providers",
+    "Provider publish is only available under /v1/publish/providers",
   );
 }
 
@@ -101,6 +101,6 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   void request;
   void params;
   return methodNotAllowed(
-    "Provider deletes are only available under /v1/admin/providers",
+    "Provider deletes are only available under /v1/publish/providers",
   );
 }
