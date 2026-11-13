@@ -63,14 +63,14 @@ flow:
 ```bash
 BASE=https://stellaris.example.com
 KEY=stlr_providers_write_key
-NS=evilcorp; TYPE=cloudflare; VER=5.19.1-beta.1
+NS=myorg; TYPE=example; VER=1.0.0
 
 curl -sS -D - -o /dev/null -X POST \
   "$BASE/v1/publish/providers/$NS/$TYPE/versions" \
   -H "Authorization: Bearer $KEY" \
   -F "version=$VER" \
   -F 'protocols=["5.0"]' \
-  -F 'gpg_public_keys=[{"key_id":"ABCDEF0123456789","ascii_armor":"-----BEGIN PGP PUBLIC KEY BLOCK-----\n...\n-----END PGP PUBLIC KEY BLOCK-----","source":"evilcorp"}]' \
+  -F 'gpg_public_keys=[{"key_id":"ABCDEF0123456789","ascii_armor":"-----BEGIN PGP PUBLIC KEY BLOCK-----\n...\n-----END PGP PUBLIC KEY BLOCK-----","source":"myorg"}]' \
   -F "SHA256SUMS=@./dist/_SHA256SUMS" \
   -F "SHA256SUMS.sig=@./dist/_SHA256SUMS.sig"
 # → 201, response header: ETag: W/"1"

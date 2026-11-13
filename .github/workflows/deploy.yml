@@ -2,17 +2,13 @@
 #
 # DISABLED: triggers are intentionally empty so this workflow does not
 # auto-run. Enable later by adding `push:` / `workflow_dispatch:` once
-# the deployment path is validated and the Evil Corp Cloudflare token
-# is wired as a repo/environment secret.
+# the deployment path is validated and a Cloudflare token is wired as a
+# repo/environment secret.
 #
 # Required secrets (set in repo settings → Secrets and variables → Actions):
 #   CLOUDFLARE_API_TOKEN  — token with Workers Scripts:Edit, D1:Edit,
-#                           R2:Edit, Workers Routes:Edit on Evil Corp account
+#                           R2:Edit, Workers Routes:Edit on your account
 #   CLOUDFLARE_ACCOUNT_ID — <your-cloudflare-account-id>
-#
-# Org policy (Evil Corp AI trail):
-#   PRs from this workflow → label `evilcorp:ai:autonomous`
-#   PRs touching this file by humans-with-AI → `evilcorp:ai:assisted`
 
 name: Deploy
 
@@ -27,7 +23,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy to Cloudflare Workers (Evil Corp)
+    name: Deploy to Cloudflare Workers
     runs-on: ubuntu-latest
     environment: production
     steps:

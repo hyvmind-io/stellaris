@@ -2,7 +2,7 @@
 #
 # DISABLED: triggers are intentionally empty so this workflow does not
 # auto-run. Enable later by adding `pull_request:` / `push:` triggers
-# once the test suite is green on the Evil Corp-hosted setup.
+# once the test suite is green in CI.
 
 name: CI
 

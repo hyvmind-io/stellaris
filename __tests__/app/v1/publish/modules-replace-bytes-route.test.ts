@@ -58,7 +58,7 @@ const mockUploadTarball = vi.mocked(uploadModuleTarball);
 const mockDeleteObject = vi.mocked(deleteObject);
 
 const params = {
-  namespace: "evilcorp",
+  namespace: "acme",
   name: "vpc",
   system: "aws",
   version: "1.0.0",
@@ -66,14 +66,14 @@ const params = {
 
 const existingModule = {
   id: 1,
-  namespace: "evilcorp",
+  namespace: "acme",
   name: "vpc",
   provider: "aws",
   version: "1.0.0",
   owner: "",
   description: null,
   source: null,
-  location: "evilcorp/vpc/aws/1.0.0.tar.gz",
+  location: "acme/vpc/aws/1.0.0.tar.gz",
   tags: '["aws"]',
   downloads: 0,
   revision: 3,
@@ -103,7 +103,7 @@ describe("PUT /v1/publish/modules/.../versions/:version (replace bytes)", () => 
       name: "ci-key",
     } as never);
     mockFindModule.mockResolvedValue(existingModule as never);
-    mockUploadTarball.mockResolvedValue("evilcorp/vpc/aws/1.0.0.tar.gz");
+    mockUploadTarball.mockResolvedValue("acme/vpc/aws/1.0.0.tar.gz");
     mockReplaceBytes.mockResolvedValue({
       ...existingModule,
       revision: 4,
@@ -133,19 +133,19 @@ describe("PUT /v1/publish/modules/.../versions/:version (replace bytes)", () => 
     expect(response.status).toBe(200);
     expect(response.headers.get("ETag")).toBe('W/"4"');
     expect(mockUploadTarball).toHaveBeenCalledWith(
-      "evilcorp",
+      "acme",
       "vpc",
       "aws",
       "1.0.0",
       expect.anything(),
     );
     expect(mockReplaceBytes).toHaveBeenCalledWith(
-      "evilcorp",
+      "acme",
       "vpc",
       "aws",
       "1.0.0",
       3,
-      expect.objectContaining({ location: "evilcorp/vpc/aws/1.0.0.tar.gz" }),
+      expect.objectContaining({ location: "acme/vpc/aws/1.0.0.tar.gz" }),
     );
   });
 
@@ -218,7 +218,7 @@ describe("PUT /v1/publish/modules/.../versions/:version (replace bytes)", () => 
   it("returns 400 when the module file is missing", async () => {
     mockIsImmutable.mockResolvedValue(false);
     const form = new FormData();
-    form.set("owner", "evilcorp");
+    form.set("owner", "acme");
 
     const response = await PUT(multipartRequest(form), {
       params: Promise.resolve(params),

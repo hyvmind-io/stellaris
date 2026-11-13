@@ -21,7 +21,7 @@ const env = process.env as unknown as Record<string, string | undefined>;
 // `CryptoKey | Uint8Array`. Use the union directly.
 type SignKey = CryptoKey | Uint8Array;
 
-const TEAM_DOMAIN = "evilcorp.cloudflareaccess.com";
+const TEAM_DOMAIN = "example.cloudflareaccess.com";
 const ISSUER = `https://${TEAM_DOMAIN}`;
 const AUD = "0123456789abcdef0123456789abcdef";
 
@@ -62,7 +62,7 @@ async function sign(
   const nowSec = Math.floor(Date.now() / 1000);
   const payload: Record<string, unknown> = {};
   if (opts.email !== null) {
-    payload.email = opts.email ?? "alice@evilcorp.com";
+    payload.email = opts.email ?? "alice@example.com";
   }
   if (opts.name) payload.name = opts.name;
   return new SignJWT(payload)
@@ -109,14 +109,14 @@ describe("verifyCfAccessJwt", () => {
   it("verifies a good token and extracts email + name", async () => {
     const keys = await makeKeys("key-1");
     const token = await sign(keys.privateKey, {
-      email: "Alice@EVILCORP.com",
+      email: "Alice@EXAMPLE.com",
       name: "Alice Smith",
     });
     const result = await verifyCfAccessJwt(token, {
       keySet: jwksFor([keys.publicJwk]),
     });
     expect(result).not.toBeNull();
-    expect(result!.email).toBe("alice@evilcorp.com");
+    expect(result!.email).toBe("alice@example.com");
     expect(result!.name).toBe("Alice Smith");
   });
 
