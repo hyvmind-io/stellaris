@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 
 // ============================================================================
@@ -206,6 +206,29 @@ describe("GET /v1/modules/tarball/[...path]", () => {
 
       expect(response.status).toBe(200);
       expect(mockGetModuleTarball).toHaveBeenCalled();
+    });
+  });
+
+  describe("CLOUDFLARE_WORKERS_FREE_TIER", () => {
+    beforeEach(() => mockIsStrictMode.mockReturnValue(false));
+    afterEach(() => vi.unstubAllEnvs());
+
+    it("redirects to R2, still counts the download, and never reads the object", async () => {
+      vi.stubEnv("CLOUDFLARE_WORKERS_FREE_TIER", "true");
+      vi.stubEnv("R2_PUBLIC_BASE_URL", "https://artifacts.example.test");
+      mockParseModuleKey.mockReturnValue({
+        namespace: "hashicorp",
+        name: "consul",
+        provider: "aws",
+        version: "0.1.0",
+      });
+      const response = await GET(makeRequest(), makeParams());
+      expect(response.status).toBe(307);
+      expect(response.headers.get("Location")).toBe(
+        "https://artifacts.example.test/hashicorp/consul/aws/0.1.0.tar.gz",
+      );
+      expect(mockGetModuleTarball).not.toHaveBeenCalled();
+      expect(mockIncrementModuleDownloads).toHaveBeenCalledWith("hashicorp", "consul", "aws", "0.1.0");
     });
   });
 });

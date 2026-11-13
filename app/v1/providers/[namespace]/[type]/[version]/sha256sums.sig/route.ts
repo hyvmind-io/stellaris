@@ -7,6 +7,7 @@ import { requireAuth } from "@/lib/auth/middleware";
 import { isStrictMode } from "@/lib/auth/registry-mode";
 import { resolveProviderCoordinates } from "@/lib/data/aliases";
 import { getObject } from "@/lib/storage";
+import { offloadedArtifact } from "@/lib/storage/artifact-url";
 /**
  * GET /v1/providers/:namespace/:type/:version/sha256sums.sig
  *
@@ -47,6 +48,9 @@ export async function GET(
     const { namespace, type, version } = parsed.data;
     const canonical = await resolveProviderCoordinates(namespace, type);
     const key = `providers/${canonical.namespace}/${canonical.type}/${version}/SHA256SUMS.sig`;
+
+    const offloaded = await offloadedArtifact(key);
+    if (offloaded) return offloaded;
 
     const object = await getObject(key);
     if (!object) {

@@ -56,6 +56,24 @@ the web UI session, the second gates API artifact downloads:
 | `false` | `relaxed` | Public | Partial auth |
 | `false` | `strict` | Public | Full auth |
 
+## Workers Free tier artifact offload
+
+Workers Free caps each request at 10 ms of CPU, which streaming artifact bytes through the Worker exceeds (Cloudflare error 1102), even for a few-hundred-byte `SHA256SUMS`. With `CLOUDFLARE_WORKERS_FREE_TIER=true`, no artifact bytes pass through the Worker:
+
+- `GET /v1/providers/.../download/:os/:arch` returns the R2 URL directly as `download_url`.
+- The provider zip, `SHA256SUMS`, `SHA256SUMS.sig` and module tarball routes answer `307` to the R2 URL.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `CLOUDFLARE_WORKERS_FREE_TIER` | `false` | `true` turns on the offload above. `false` keeps streaming artifacts through the Worker (Workers Paid). |
+| `R2_PUBLIC_BASE_URL` | unset | Public R2 custom domain. When set, artifacts redirect to `<base>/<key>`; takes precedence over presigning. |
+| `R2_ACCOUNT_ID` | unset | Cloudflare account ID for the R2 S3 endpoint used to presign. |
+| `R2_ACCESS_KEY_ID` | unset | R2 S3 access key ID (Worker secret). |
+| `R2_SECRET_ACCESS_KEY` | unset | R2 S3 secret access key (Worker secret). |
+| `R2_BUCKET_NAME` | `stellaris-modules` | Bucket the presigned URLs point at. |
+
+Without `R2_PUBLIC_BASE_URL`, artifact URLs are presigned R2 GETs valid for 10 minutes, so the bucket stays private; the signature is the access control, which is why Terraform/OpenTofu can follow the redirect without a Bearer token. With `R2_PUBLIC_BASE_URL`, anyone who has an artifact URL can download it, as in `relaxed` mode today. If the flag is on but neither option is configured, routes keep streaming and log one warning.
+
 ## Cloudflare Access passthrough (optional)
 
 These variables are only relevant when fronting Stellaris with

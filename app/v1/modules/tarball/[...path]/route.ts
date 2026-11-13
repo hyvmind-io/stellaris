@@ -5,6 +5,7 @@ import { binaryResponse } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/middleware";
 import { isStrictMode } from "@/lib/auth/registry-mode";
 import { getModuleTarball } from "@/lib/storage";
+import { offloadedArtifact } from "@/lib/storage/artifact-url";
 import { parseModuleKey } from "@/lib/storage/keys";
 import { incrementModuleDownloads } from "@/lib/data/modules";
 /**
@@ -53,8 +54,10 @@ export async function GET(
       return notFound("Invalid tarball path");
     }
 
-    const object = await getModuleTarball(key);
-    if (!object) {
+    // Free tier redirects to R2, which answers 404 itself for a missing object.
+    const offloaded = await offloadedArtifact(key);
+    const object = offloaded ? null : await getModuleTarball(key);
+    if (!offloaded && !object) {
       return notFound("Module tarball not found");
     }
 
@@ -74,8 +77,10 @@ export async function GET(
       // Best-effort — don't fail the download if counter update fails
     }
 
+    if (offloaded) return offloaded;
+
     return binaryResponse(
-      object.body,
+      object!.body,
       "application/gzip",
       path[path.length - 1],
     );

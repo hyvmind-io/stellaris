@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 
 // ============================================================================
@@ -213,6 +213,29 @@ describe("GET /v1/providers/[namespace]/[type]/[version]/sha256sums", () => {
 
       expect(response.status).toBe(200);
       expect(mockGetObject).toHaveBeenCalled();
+    });
+  });
+
+  describe("CLOUDFLARE_WORKERS_FREE_TIER", () => {
+    beforeEach(() => mockIsStrictMode.mockReturnValue(false));
+    afterEach(() => vi.unstubAllEnvs());
+
+    it("serves the file from the Worker when the flag is unset", async () => {
+      vi.stubEnv("R2_PUBLIC_BASE_URL", "https://artifacts.example.test");
+      const response = await GET(makeRequest(), makeRouteParams());
+      expect(response.status).toBe(200);
+      expect(mockGetObject).toHaveBeenCalled();
+    });
+
+    it("redirects to R2 without reading the object when true", async () => {
+      vi.stubEnv("CLOUDFLARE_WORKERS_FREE_TIER", "true");
+      vi.stubEnv("R2_PUBLIC_BASE_URL", "https://artifacts.example.test");
+      const response = await GET(makeRequest(), makeRouteParams());
+      expect(response.status).toBe(307);
+      expect(response.headers.get("Location")).toBe(
+        "https://artifacts.example.test/providers/hashicorp/aws/5.0.0/SHA256SUMS",
+      );
+      expect(mockGetObject).not.toHaveBeenCalled();
     });
   });
 });

@@ -17,6 +17,19 @@ const envSchema = z.object({
   // "relaxed" (default) leaves artifact routes public (vanilla tofu/terraform compatible).
   // "strict" requires Bearer auth on ALL routes including artifact downloads.
   PRIVATE_REGISTRY_MODE: z.enum(["relaxed", "strict"]).default("relaxed"),
+  // Workers Free: redirect artifact downloads to R2 instead of streaming them
+  // through the Worker (10 ms CPU cap). See docs/configuration.md.
+  CLOUDFLARE_WORKERS_FREE_TIER: z.enum(["true", "false"]).default("false"),
+  // Public R2 base URL (custom domain); takes precedence over presigned URLs.
+  R2_PUBLIC_BASE_URL: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z.string().url().optional(),
+  ),
+  // R2 S3 API credentials for presigned artifact URLs.
+  R2_ACCESS_KEY_ID: z.string().optional(),
+  R2_SECRET_ACCESS_KEY: z.string().optional(),
+  R2_ACCOUNT_ID: z.string().optional(),
+  R2_BUCKET_NAME: z.string().default("stellaris-modules"),
   // Storage backend: "local" for pnpm dev, "r2" for Cloudflare Workers, "s3"/"s3-compatible" for S3
   STORAGE_BACKEND: z.enum(["local", "r2", "s3", "s3-compatible"]).default("r2"),
   // S3 storage configuration (required when STORAGE_BACKEND is "s3" or "s3-compatible")

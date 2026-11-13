@@ -7,6 +7,7 @@ import { requireAuth } from "@/lib/auth/middleware";
 import { isStrictMode } from "@/lib/auth/registry-mode";
 import { resolveProviderCoordinates } from "@/lib/data/aliases";
 import { getObject } from "@/lib/storage";
+import { offloadedArtifact } from "@/lib/storage/artifact-url";
 import { generateProviderKey } from "@/lib/storage/keys";
 /**
  * GET /v1/providers/:namespace/:type/:version/download/:os/:arch/zip
@@ -60,6 +61,9 @@ export async function GET(
       os,
       arch,
     );
+
+    const offloaded = await offloadedArtifact(key);
+    if (offloaded) return offloaded;
 
     const object = await getObject(key);
     if (!object) {

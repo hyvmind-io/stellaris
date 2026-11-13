@@ -6,6 +6,8 @@ import { resolveProviderCoordinates } from "@/lib/data/aliases";
 import { findProviderPackage } from "@/lib/data/providers";
 import { requireAuth } from "@/lib/auth/middleware";
 import { proxyProviderJson } from "@/lib/upstream/proxy";
+import { artifactUrl, isWorkersFreeTier } from "@/lib/storage/artifact-url";
+import { generateProviderKey } from "@/lib/storage/keys";
 
 /**
  * GET /v1/providers/:namespace/:type/:version/download/:os/:arch
@@ -52,6 +54,13 @@ export async function GET(
 
     if (pkg) {
       const { provider, platform, gpgKeys } = pkg;
+      const zipPath = `/v1/providers/${namespace}/${type}/${version}/download/${os}/${arch}/zip`;
+      // Free tier: hand the CLI the R2 URL directly so no bytes cross the Worker.
+      const offloadedUrl = isWorkersFreeTier()
+        ? await artifactUrl(
+            generateProviderKey(canonical.namespace, canonical.type, version, os, arch),
+          )
+        : null;
 
       // Terraform CLI expects this exact response format
       return jsonResponse({
@@ -59,7 +68,7 @@ export async function GET(
         os: platform.os,
         arch: platform.arch,
         filename: platform.filename,
-        download_url: `/v1/providers/${namespace}/${type}/${version}/download/${os}/${arch}/zip`,
+        download_url: offloadedUrl ?? zipPath,
         shasums_url: `/v1/providers/${namespace}/${type}/${version}/sha256sums`,
         shasums_signature_url: `/v1/providers/${namespace}/${type}/${version}/sha256sums.sig`,
         shasum: platform.shasum,

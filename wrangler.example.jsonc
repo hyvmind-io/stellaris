@@ -38,6 +38,8 @@
     }
   ],
   "vars": {
-    "NODE_ENV": "production"
+    "NODE_ENV": "production",
+    // "true" on Workers Free: artifacts redirect to R2 (see docs/configuration.md)
+    "CLOUDFLARE_WORKERS_FREE_TIER": "false"
   }
 }
