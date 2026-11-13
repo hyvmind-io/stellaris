@@ -1,4 +1,5 @@
 import { parseEnv } from "@/lib/env";
+import { presignGetUrl } from "@/lib/storage/sigv4";
 
 const PRESIGN_TTL_SECONDS = 600;
 
@@ -24,24 +25,14 @@ export async function artifactUrl(key: string): Promise<string | null> {
   const { R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ACCOUNT_ID } = env;
   if (!R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY || !R2_ACCOUNT_ID) return null;
 
-  // Loaded lazily so non-free deployments never pay for the SDK.
-  const [{ S3Client, GetObjectCommand }, { getSignedUrl }] = await Promise.all([
-    import("@aws-sdk/client-s3"),
-    import("@aws-sdk/s3-request-presigner"),
-  ]);
-  const client = new S3Client({
+  return presignGetUrl({
+    host: `${env.R2_BUCKET_NAME}.${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    path: `/${key}`,
+    accessKeyId: R2_ACCESS_KEY_ID,
+    secretAccessKey: R2_SECRET_ACCESS_KEY,
     region: "auto",
-    endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-    credentials: {
-      accessKeyId: R2_ACCESS_KEY_ID,
-      secretAccessKey: R2_SECRET_ACCESS_KEY,
-    },
+    expiresSeconds: PRESIGN_TTL_SECONDS,
   });
-  return getSignedUrl(
-    client,
-    new GetObjectCommand({ Bucket: env.R2_BUCKET_NAME, Key: key }),
-    { expiresIn: PRESIGN_TTL_SECONDS },
-  );
 }
 
 /**
