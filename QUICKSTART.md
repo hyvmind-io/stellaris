@@ -317,15 +317,7 @@ pnpm db:create-key --name "my-key"
 pnpm db:create-key --name "admin" --permissions '["admin"]' --remote
 ```
 
-### Bootstrap first key (no auth needed when DB is empty)
-
-```bash
-curl -X POST http://localhost:3000/v1/api-keys \
-  -H "Content-Type: application/json" \
-  -d '{"name": "admin", "description": "Initial admin key"}'
-```
-
-### Create additional key (requires auth)
+### Create additional key (requires an admin key)
 
 ```bash
 curl -X POST http://localhost:3000/v1/api-keys \

@@ -26,7 +26,7 @@ Navigate to: **Cloudflare Dashboard → Security → WAF → Rate Limiting Rules
 
 | Rule Name        | Path           | Method | Limit   | Period | Action      | Notes                           |
 | ---------------- | -------------- | ------ | ------- | ------ | ----------- | ------------------------------- |
-| API key creation | `/v1/api-keys` | POST   | 5 req   | 1 min  | Block (60s) | Protects bootstrap endpoint     |
+| API key creation | `/v1/api-keys` | POST   | 5 req   | 1 min  | Block (60s) | Slows admin-key brute forcing   |
 | General API      | `/v1/*`        | Any    | 200 req | 1 min  | Block (60s) | Prevents abuse of registry APIs |
 
 ### How to Create a Rule
@@ -79,18 +79,9 @@ This approach runs inside the Worker but uses Cloudflare's distributed rate limi
 
 Documentation: https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/
 
-## Bootstrap Endpoint Considerations
+## API Key Endpoint Considerations
 
-The `POST /v1/api-keys` endpoint has a **bootstrap mechanism**: when no API keys exist in the database, key creation is allowed without authentication. This is necessary for initial setup but creates an additional attack surface.
-
-Mitigations:
-
-1. **WAF rate limiting** (see table above) — restrict to 5 requests/min per IP.
-2. **Cloudflare Access** — restrict the bootstrap endpoint (`POST /v1/api-keys` when unauthenticated) to trusted IPs or require identity verification via Cloudflare Access policies.
-3. **Monitor** — set up Cloudflare notifications for rate limiting rule triggers to detect brute-force attempts.
-
-See the inline documentation in `app/v1/api-keys/route.ts` (lines 57–76) of the
-repository for the full rationale and implementation notes.
+`POST /v1/api-keys` always requires an `admin` key; there is no unauthenticated path. Rate limit it anyway (see table above) and set up Cloudflare notifications for rule triggers to spot brute-force attempts against keys.
 
 ## Summary
 

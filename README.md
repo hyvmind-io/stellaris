@@ -31,7 +31,7 @@ Inspired by the now-abandoned [Citizen](https://github.com/outsideris/citizen) p
 - **Provider registry** — Publish providers with multi-platform binaries, SHA256 checksums, and GPG signing keys
 - **Web UI** — Browse modules and providers, view versions, search across your registry with a modern dark/light interface
 - **Edge-first architecture** — Runs entirely on Cloudflare Workers with D1 for metadata and R2 for artifact storage; no origin servers
-- **API key authentication** — SHA-256 hashed keys with optional expiration; bootstrap-friendly (first key requires no auth)
+- **API key authentication** — SHA-256 hashed keys with optional expiration; the first admin is seeded from the CLI (`pnpm db:seed-admin` / `pnpm db:create-key`)
 - **Dark & light themes** — Dracula Pro (dark, default) and Alucard Pro (light) via `next-themes`
 
 ## Quick Start
@@ -224,10 +224,8 @@ See the [full API documentation](docs/API.md) for detailed request/response exam
 | `GET`    | `/v1/providers/:namespace/:type/:version`       | Specific provider version     | No          |
 | `POST`   | `/v1/providers/:namespace/:type/:version`       | Publish provider              | **Yes**     |
 | `DELETE` | `/v1/providers/:namespace/:type/:version`       | Delete provider version       | **Yes**     |
-| `POST`   | `/v1/api-keys`                                  | Create API key                | Bootstrap\* |
-| `GET`    | `/v1/api-keys`                                  | List API keys (metadata only) | **Yes**     |
-
-\* The first API key can be created without authentication (bootstrap). All subsequent creations require a valid key.
+| `POST`   | `/v1/api-keys`                                  | Create API key                | **Admin**   |
+| `GET`    | `/v1/api-keys`                                  | List API keys (metadata only) | **Admin**   |
 
 ## Publishing
 
@@ -329,31 +327,16 @@ curl -X POST https://stellaris.example.com/v1/providers/myorg/custom/1.0.0 \
   -F "SHA256SUMS.sig=@./SHA256SUMS.sig"
 ```
 
-### Bootstrap the First API Key
+### Create the First API Key
 
-When no API keys exist, creation is allowed without authentication:
+`POST /v1/api-keys` always requires an `admin` key, so the first one is seeded straight into D1:
 
 ```bash
-curl -X POST https://stellaris.example.com/v1/api-keys \
-  -H "Content-Type: application/json" \
-  -d '{"name": "admin", "description": "Initial admin key"}'
+pnpm db:seed-admin                                            # first admin user (UI login, mints keys from the profile page)
+pnpm db:create-key --name admin --permissions '["admin"]' --remote   # or a raw admin API key
 ```
 
-**Response** (`201 Created`):
-
-```json
-{
-  "key": "stlr_a1b2c3d4e5f6...",
-  "id": 1,
-  "name": "admin",
-  "description": "Initial admin key",
-  "permissions": null,
-  "created_at": "2026-02-18T12:00:00.000Z",
-  "expires_at": null
-}
-```
-
-> **Important:** The plaintext `key` is only returned once at creation time. Store it securely.
+> **Important:** The plaintext `key` is only printed once at creation time. Store it securely.
 
 ## Development
 

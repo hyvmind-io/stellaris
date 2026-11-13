@@ -53,7 +53,7 @@ Both `Bearer <key>` and raw `<key>` formats are accepted in the `Authorization` 
 
 Publishing lives under `/v1/publish/...` and needs the resource's write scope: `/v1/publish/modules/...` requires `modules:write`, `/v1/publish/providers/...` requires `providers:write`. Everything under `/v1/admin/...` (aliases, settings) and `/v1/api-keys` requires `admin`. An `admin` key satisfies every scope.
 
-**Bootstrap mode:** When no API keys exist in the database, the `POST /v1/api-keys` endpoint allows unauthenticated access to create the first key.
+There is no unauthenticated way to create a key. Seed the first admin with `pnpm db:seed-admin` or `pnpm db:create-key --permissions '["admin"]'`.
 
 Read endpoints (listing, downloading, searching) do not require authentication.
 
@@ -936,9 +936,7 @@ POST /v1/api-keys
 
 Create a new API key. The plaintext key is only returned in this response — store it securely.
 
-**Authentication:** Required (unless no keys exist — see bootstrap mode below).
-
-**Bootstrap mode:** If the `api_keys` table is empty (no keys have been created yet), this endpoint allows unauthenticated access. This lets you create the initial admin key on a fresh deployment.
+**Authentication:** Required — `admin` scope. Seed the first admin key with `pnpm db:create-key --name admin --permissions '["admin"]' --remote`.
 
 **Request Body:** `application/json`
 
@@ -949,18 +947,7 @@ Create a new API key. The plaintext key is only returned in this response — st
 | `permissions` | string[] | No       | Permission scopes: `admin`, `modules:read`, `modules:write`, `providers:read`, `providers:write`. Defaults to `["admin"]` |
 | `expires_at`  | string   | No       | Expiration date in ISO 8601 format                    |
 
-**Example (bootstrap — no auth needed):**
-
-```bash
-curl -X POST https://stellaris.example.com/v1/api-keys \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "admin",
-    "description": "Initial admin key"
-  }'
-```
-
-**Example (with auth):**
+**Example:**
 
 ```bash
 curl -X POST https://stellaris.example.com/v1/api-keys \

@@ -24,7 +24,7 @@ type RouteParams = { params: Promise<{ id: string }> };
  * Returns 204 on success, 404 if the key doesn't exist.
  *
  * Self-revocation is allowed unless this is the last admin key — deleting the
- * last admin key is blocked to prevent accidental lockout into bootstrap mode.
+ * last admin key would leave no way to manage keys over the API.
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
@@ -50,9 +50,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return notFound(`API key ${parsed.data} not found`);
     }
 
-    // Prevent deletion of the last admin key to avoid accidental lockout.
-    // If the only remaining admin key is deleted, the registry enters bootstrap
-    // mode where anyone can create keys without authentication.
+    // Prevent deletion of the last admin key to avoid API lockout.
     const keyPerms = keyToDelete.permissions ?? [];
     if (keyPerms.includes("admin")) {
       // Count all admin keys (keys where permissions JSON array contains "admin").

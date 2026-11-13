@@ -40,9 +40,9 @@ Key facts:
   `modules:write`, provider routes require `providers:write`.
 - Everything under `/v1/admin/...` (aliases, settings) and API-key management
   (`/v1/api-keys`) requires `admin`. An `admin` key satisfies every scope.
-- **Bootstrap mode:** when no API keys exist yet, `POST /v1/api-keys` is allowed
-  without authentication so the first key can be created. After that, normal
-  auth applies.
+- There is no unauthenticated key creation. Seed the first admin with
+  `pnpm db:seed-admin` (user) or `pnpm db:create-key --permissions '["admin"]'`
+  (API key).
 
 Read endpoints (listing, downloading, searching) do not require an API key,
 subject to the registry mode described below.

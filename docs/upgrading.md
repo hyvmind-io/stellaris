@@ -2,6 +2,21 @@
 
 Breaking changes and the steps to adopt them, newest first.
 
+## Bootstrap key creation removed
+
+**Breaking.** `POST /v1/api-keys` no longer creates a key without authentication when the `api_keys` table is empty. It always requires an `admin` key and returns `401` otherwise.
+
+### Migration
+
+Seed the first admin from the CLI before using the API:
+
+```bash
+pnpm db:seed-admin                                                  # admin user; mint keys from the profile page
+pnpm db:create-key --name admin --permissions '["admin"]' --remote  # or a raw admin API key
+```
+
+Existing deployments that already have keys are unaffected.
+
 ## Publishing moved to `/v1/publish`, scoped keys can publish
 
 **Breaking.** No redirects or aliases: the old `/v1/admin` publish paths return `404`.

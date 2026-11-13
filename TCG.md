@@ -142,7 +142,7 @@ and the service discovery/health endpoints.
 - `GET /v1/providers/:ns/:type/versions` — List versions with platforms (Terraform protocol)
 - `GET /v1/providers/:ns/:type/:version/download/:os/:arch` — Find provider package
 - `GET /.well-known/terraform.json` — Terraform service discovery
-- `POST /v1/api-keys` — Create API key (bootstrap: first key needs no auth)
+- `POST /v1/api-keys` — Create API key (requires `admin`)
 
 ---
 
