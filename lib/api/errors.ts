@@ -41,6 +41,10 @@ export function methodNotAllowed(
   return NextResponse.json({ errors: [message] }, { status: 405 });
 }
 
+export function tooManyRequests(message = "Too many requests"): NextResponse<ApiError> {
+  return NextResponse.json({ errors: [message] }, { status: 429, headers: { "Retry-After": "60" } });
+}
+
 /**
  * 428 Precondition Required — mutable admin writes require `If-Match`.
  */

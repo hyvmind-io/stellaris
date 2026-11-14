@@ -54,13 +54,18 @@ export async function GET(
 
     if (pkg) {
       const { provider, platform, gpgKeys } = pkg;
-      const zipPath = `/v1/providers/${namespace}/${type}/${version}/download/${os}/${arch}/zip`;
-      // Free tier: hand the CLI the R2 URL directly so no bytes cross the Worker.
-      const offloadedUrl = isWorkersFreeTier()
-        ? await artifactUrl(
-            generateProviderKey(canonical.namespace, canonical.type, version, os, arch),
-          )
-        : null;
+      const base = `/v1/providers/${namespace}/${type}/${version}`;
+      const objectBase = `providers/${canonical.namespace}/${canonical.type}/${version}`;
+      // Free tier: hand the CLI R2 URLs directly so no bytes cross the Worker
+      // and the artifact routes can require a Bearer token.
+      const free = isWorkersFreeTier();
+      const [zipUrl, sumsUrl, sigUrl] = free
+        ? await Promise.all([
+            artifactUrl(generateProviderKey(canonical.namespace, canonical.type, version, os, arch)),
+            artifactUrl(`${objectBase}/SHA256SUMS`),
+            artifactUrl(`${objectBase}/SHA256SUMS.sig`),
+          ])
+        : [null, null, null];
 
       // Terraform CLI expects this exact response format
       return jsonResponse({
@@ -68,9 +73,9 @@ export async function GET(
         os: platform.os,
         arch: platform.arch,
         filename: platform.filename,
-        download_url: offloadedUrl ?? zipPath,
-        shasums_url: `/v1/providers/${namespace}/${type}/${version}/sha256sums`,
-        shasums_signature_url: `/v1/providers/${namespace}/${type}/${version}/sha256sums.sig`,
+        download_url: zipUrl ?? `${base}/download/${os}/${arch}/zip`,
+        shasums_url: sumsUrl ?? `${base}/sha256sums`,
+        shasums_signature_url: sigUrl ?? `${base}/sha256sums.sig`,
         shasum: platform.shasum,
         signing_keys: {
           gpg_public_keys: gpgKeys.map((key) => ({

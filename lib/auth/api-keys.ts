@@ -72,9 +72,11 @@ function hexToBytes(hex: string): Uint8Array {
 // Validation
 // ============================================================================
 
+const LAST_USED_WRITE_INTERVAL_MS = 60 * 60 * 1000;
+
 /**
  * Validate an API key by hashing it and looking it up in the database.
- * Checks expiration and updates `lastUsedAt` on success.
+ * Checks expiration and updates `lastUsedAt` (at most hourly) on success.
  *
  * Uses a timing-safe comparison as defense-in-depth — even though the DB
  * lookup uses the hash for filtering, we re-verify with constant-time
@@ -113,14 +115,14 @@ export async function validateApiKey(key: string): Promise<ApiKey | null> {
     return null;
   }
 
-  // Update lastUsedAt (best-effort, don't fail the request)
-  try {
-    await db
-      .update(apiKeys)
-      .set({ lastUsedAt: new Date() })
-      .where(eq(apiKeys.id, record.id));
-  } catch {
-    // Non-critical — don't block authentication on analytics update
+  // Update lastUsedAt at most hourly to spare D1 writes (best-effort).
+  const now = new Date();
+  if (!record.lastUsedAt || now.getTime() - record.lastUsedAt.getTime() >= LAST_USED_WRITE_INTERVAL_MS) {
+    try {
+      await db.update(apiKeys).set({ lastUsedAt: now }).where(eq(apiKeys.id, record.id));
+    } catch {
+      // Non-critical — don't block authentication on analytics update
+    }
   }
 
   return record;

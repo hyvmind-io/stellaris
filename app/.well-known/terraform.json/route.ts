@@ -7,8 +7,12 @@ import { jsonResponse } from "@/lib/api/response";
  * ref: https://developer.hashicorp.com/terraform/internals/remote-service-discovery
  */
 export async function GET() {
-  return jsonResponse({
-    "modules.v1": "/v1/modules/",
-    "providers.v1": "/v1/providers/",
-  });
+  return jsonResponse(
+    {
+      "modules.v1": "/v1/modules/",
+      "providers.v1": "/v1/providers/",
+    },
+    200,
+    "public, max-age=3600",
+  );
 }

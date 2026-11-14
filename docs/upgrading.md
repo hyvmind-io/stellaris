@@ -2,6 +2,16 @@
 
 Breaking changes and the steps to adopt them, newest first.
 
+## Download counting and login throttling moved
+
+**Behavior change.** No API contract changes, but operators may notice:
+
+- **Module download counts** now increment at `GET /v1/modules/.../:version/download` (authenticated, existing modules only), not when the tarball is fetched. Unknown or malformed tarball paths no longer write to D1.
+- **Tarball paths** must be valid module coordinates (`namespace/name/system/x.y.z.tar.gz`); anything else returns `404`.
+- **Login/signup throttling** uses the `AUTH_RATE_LIMITER` Workers Rate Limiting binding instead of the D1 `rate_limits` table, which migration `0008` drops. Add the `ratelimits` block from `wrangler.example.jsonc` and run `pnpm db:setup:remote`. Without the binding, login and signup are not throttled.
+- **API responses** send `Cache-Control: no-store`, except `/.well-known/terraform.json` (`public, max-age=3600`).
+- **API key `last_used_at`** is updated at most once per hour per key.
+
 ## Bootstrap key creation removed
 
 **Breaking.** `POST /v1/api-keys` no longer creates a key without authentication when the `api_keys` table is empty. It always requires an `admin` key and returns `401` otherwise.

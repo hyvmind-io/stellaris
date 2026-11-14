@@ -6,8 +6,8 @@ import { requireAuth } from "@/lib/auth/middleware";
 import { isStrictMode } from "@/lib/auth/registry-mode";
 import { getModuleTarball } from "@/lib/storage";
 import { offloadedArtifact } from "@/lib/storage/artifact-url";
-import { parseModuleKey } from "@/lib/storage/keys";
-import { incrementModuleDownloads } from "@/lib/data/modules";
+import { generateModuleKey, parseModuleKey } from "@/lib/storage/keys";
+import { moduleTarballCoordinates } from "@/lib/validation/registry";
 /**
  * GET /v1/modules/tarball/[...path]
  *
@@ -22,6 +22,8 @@ import { incrementModuleDownloads } from "@/lib/data/modules";
  *   which returns this URL. Terraform/OpenTofu does not forward Bearer tokens
  *   when following X-Terraform-Get URLs.
  * - strict: Requires Bearer auth with "modules:read" permission.
+ *
+ * Downloads are counted at the authenticated download endpoint, not here.
  */
 export async function GET(
   request: Request,
@@ -39,51 +41,25 @@ export async function GET(
 
     const { path } = await params;
 
-    if (!path || path.length === 0) {
+    // Only well-formed module coordinates map to an R2 key; this keeps crafted
+    // paths ("..", provider objects, raw keys) away from storage and D1.
+    const parsedKey = parseModuleKey((path ?? []).join("/"));
+    const coordinates = parsedKey && moduleTarballCoordinates.safeParse(parsedKey);
+    if (!coordinates || !coordinates.success) {
       return notFound("Invalid tarball path");
     }
-
-    // Reconstruct the R2 key from path segments
-    const key = path.join("/");
-
-    // Security: Validate the R2 key conforms to the expected module tarball format.
-    // Without this check, a crafted URL could serve arbitrary R2 objects
-    // (e.g., provider zips, SHA256SUMS files, or future internal objects).
-    // Format: {namespace}/{name}/{provider}/{version}.tar.gz (4 segments)
-    if (!key.endsWith(".tar.gz") || key.split("/").length !== 4) {
-      return notFound("Invalid tarball path");
-    }
+    const { namespace, name, provider, version } = coordinates.data;
+    const key = generateModuleKey(namespace, name, provider, version);
 
     // Free tier redirects to R2, which answers 404 itself for a missing object.
     const offloaded = await offloadedArtifact(key);
-    const object = offloaded ? null : await getModuleTarball(key);
-    if (!offloaded && !object) {
-      return notFound("Module tarball not found");
-    }
-
-    // Try to increment downloads (best-effort, don't fail the request)
-    // Path format: {namespace}/{name}/{provider}/{version}.tar.gz
-    try {
-      const parsed = parseModuleKey(key);
-      if (parsed) {
-        await incrementModuleDownloads(
-          parsed.namespace,
-          parsed.name,
-          parsed.provider,
-          parsed.version,
-        );
-      }
-    } catch {
-      // Best-effort — don't fail the download if counter update fails
-    }
-
     if (offloaded) return offloaded;
 
-    return binaryResponse(
-      object!.body,
-      "application/gzip",
-      path[path.length - 1],
-    );
+    const object = await getModuleTarball(key);
+    if (!object) {
+      return notFound("Module tarball not found");
+    }
+    return binaryResponse(object.body, "application/gzip", `${version}.tar.gz`);
   } catch (error) {
     console.error("Error serving module tarball:", error);
     return internalError();

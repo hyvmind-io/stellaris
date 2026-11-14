@@ -22,10 +22,6 @@ vi.mock("@/lib/data/modules", () => ({
   incrementModuleDownloads: vi.fn(),
 }));
 
-vi.mock("@/lib/storage/keys", () => ({
-  parseModuleKey: vi.fn(),
-}));
-
 // ============================================================================
 // Import mocked modules and route handler AFTER vi.mock() declarations
 // ============================================================================
@@ -34,14 +30,12 @@ import { isStrictMode } from "@/lib/auth/registry-mode";
 import { requireAuth } from "@/lib/auth/middleware";
 import { getModuleTarball } from "@/lib/storage";
 import { incrementModuleDownloads } from "@/lib/data/modules";
-import { parseModuleKey } from "@/lib/storage/keys";
 import { GET } from "@/app/v1/modules/tarball/[...path]/route";
 
 const mockIsStrictMode = vi.mocked(isStrictMode);
 const mockRequireAuth = vi.mocked(requireAuth);
 const mockGetModuleTarball = vi.mocked(getModuleTarball);
 const mockIncrementModuleDownloads = vi.mocked(incrementModuleDownloads);
-const mockParseModuleKey = vi.mocked(parseModuleKey);
 
 // ============================================================================
 // Shared fixtures
@@ -90,19 +84,12 @@ function makeParams(path: string[] = MOCK_TARBALL_PATH): {
 describe("GET /v1/modules/tarball/[...path]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Default: tarball exists, download counter succeeds, key parses correctly
+    // Default: tarball exists
     mockGetModuleTarball.mockResolvedValue(
       MOCK_TARBALL_OBJECT as unknown as Awaited<
         ReturnType<typeof getModuleTarball>
       >,
     );
-    mockIncrementModuleDownloads.mockResolvedValue(undefined);
-    mockParseModuleKey.mockReturnValue({
-      namespace: "hashicorp",
-      name: "consul",
-      provider: "aws",
-      version: "0.1.0",
-    });
   });
 
   describe("relaxed mode", () => {
@@ -209,26 +196,45 @@ describe("GET /v1/modules/tarball/[...path]", () => {
     });
   });
 
+  describe("path validation", () => {
+    beforeEach(() => mockIsStrictMode.mockReturnValue(false));
+
+    it.each([
+      [["..", "consul", "aws", "0.1.0.tar.gz"]],
+      [["hashicorp", "consul", "aws", "..%2F..%2Fx.tar.gz"]],
+      [["providers", "acme", "cf", "1.0.0", "x.zip"]],
+      [["Hashicorp", "consul", "aws", "0.1.0.tar.gz"]],
+      [["hashicorp", "consul", "aws", "latest.tar.gz"]],
+      [["hashicorp", "consul", "aws", "v0.1.0.tar.gz"]],
+    ])("rejects %j without touching storage or the counter", async (path) => {
+      const response = await GET(makeRequest(), makeParams(path));
+      expect(response.status).toBe(404);
+      expect(mockGetModuleTarball).not.toHaveBeenCalled();
+      expect(mockIncrementModuleDownloads).not.toHaveBeenCalled();
+    });
+
+    it("never counts downloads, even for a served tarball", async () => {
+      const response = await GET(makeRequest(), makeParams());
+      expect(response.status).toBe(200);
+      expect(mockIncrementModuleDownloads).not.toHaveBeenCalled();
+    });
+  });
+
   describe("CLOUDFLARE_WORKERS_FREE_TIER", () => {
     beforeEach(() => mockIsStrictMode.mockReturnValue(false));
     afterEach(() => vi.unstubAllEnvs());
 
-    it("redirects to R2, still counts the download, and never reads the object", async () => {
+    it("redirects to R2 without reading the object or counting", async () => {
       vi.stubEnv("CLOUDFLARE_WORKERS_FREE_TIER", "true");
       vi.stubEnv("R2_PUBLIC_BASE_URL", "https://artifacts.example.test");
-      mockParseModuleKey.mockReturnValue({
-        namespace: "hashicorp",
-        name: "consul",
-        provider: "aws",
-        version: "0.1.0",
-      });
       const response = await GET(makeRequest(), makeParams());
       expect(response.status).toBe(307);
       expect(response.headers.get("Location")).toBe(
         "https://artifacts.example.test/hashicorp/consul/aws/0.1.0.tar.gz",
       );
+      expect(response.headers.get("Cache-Control")).toBe("no-store");
       expect(mockGetModuleTarball).not.toHaveBeenCalled();
-      expect(mockIncrementModuleDownloads).toHaveBeenCalledWith("hashicorp", "consul", "aws", "0.1.0");
+      expect(mockIncrementModuleDownloads).not.toHaveBeenCalled();
     });
   });
 });

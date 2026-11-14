@@ -60,8 +60,11 @@ the web UI session, the second gates API artifact downloads:
 
 Workers Free caps each request at 10 ms of CPU, which streaming artifact bytes through the Worker exceeds (Cloudflare error 1102), even for a few-hundred-byte `SHA256SUMS`. With `CLOUDFLARE_WORKERS_FREE_TIER=true`, no artifact bytes pass through the Worker:
 
-- `GET /v1/providers/.../download/:os/:arch` returns the R2 URL directly as `download_url`.
+- `GET /v1/providers/.../download/:os/:arch` returns R2 URLs directly as `download_url`, `shasums_url` and `shasums_signature_url`.
+- `GET /v1/modules/.../:version/download` returns the R2 URL as `location` / `X-Terraform-Get`.
 - The provider zip, `SHA256SUMS`, `SHA256SUMS.sig` and module tarball routes answer `307` to the R2 URL.
+
+Because the CLI gets every artifact URL from an authenticated endpoint, free-tier deployments can also run `PRIVATE_REGISTRY_MODE=strict` without a client-side auth proxy: the Worker artifact routes then require a Bearer token, while presigned URLs carry their own short-lived signature.
 
 | Variable | Default | Description |
 | --- | --- | --- |

@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { validateApiKey } from "./api-keys";
-import { unauthorized, forbidden } from "@/lib/api/errors";
+import { unauthorized, forbidden, tooManyRequests } from "@/lib/api/errors";
+import { allowRequest, clientIp } from "@/lib/security/rate-limit";
 import { PERMISSIONS } from "@/lib/permissions";
 import type { ApiKey } from "@/db/schema";
 
@@ -41,6 +42,11 @@ export async function requireAuth(
 
   if (!key) {
     return unauthorized("Invalid Authorization header");
+  }
+
+  // Rate limit per client IP before the D1 key lookup.
+  if (!(await allowRequest("API_RATE_LIMITER", `api:${clientIp(request.headers)}`))) {
+    return tooManyRequests();
   }
 
   const apiKey = await validateApiKey(key);

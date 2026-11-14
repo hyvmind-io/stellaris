@@ -2,13 +2,19 @@ import { NextResponse } from "next/server";
 import { makeEtag } from "./etag";
 
 /**
- * Create a JSON response with standard registry headers.
+ * Create a JSON response with standard registry headers. Registry metadata is
+ * per-caller (auth-gated, may carry presigned URLs), so it is never cached.
  */
-export function jsonResponse<T>(data: T, status = 200): NextResponse {
+export function jsonResponse<T>(
+  data: T,
+  status = 200,
+  cacheControl = "no-store",
+): NextResponse {
   return NextResponse.json(data, {
     status,
     headers: {
       "Content-Type": "application/json",
+      "Cache-Control": cacheControl,
     },
   });
 }
@@ -24,14 +30,9 @@ export function etagResponse<T>(
   revision: number,
   status = 200,
 ): NextResponse {
-  return NextResponse.json(data, {
-    status,
-    headers: {
-      "Content-Type": "application/json",
-      ETag: makeEtag(revision),
-      "Cache-Control": "no-store",
-    },
-  });
+  const response = jsonResponse(data, status);
+  response.headers.set("ETag", makeEtag(revision));
+  return response;
 }
 
 /**
@@ -59,6 +60,7 @@ export function moduleDownloadResponse(location: string): Response {
     headers: {
       "Content-Type": "application/json",
       "X-Terraform-Get": location,
+      "Cache-Control": "no-store",
     },
   });
 }

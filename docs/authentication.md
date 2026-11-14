@@ -70,8 +70,12 @@ Two independent environment variables shape who can reach what:
     Terraform and OpenTofu do **not** forward the `Authorization` header when
     following the `X-Terraform-Get` / download redirect to fetch artifact bytes.
     In `strict` mode you therefore need a client-side auth proxy that re-attaches
-    the Bearer token to download requests. In `relaxed` mode the CLI works
-    directly because artifact routes are unauthenticated.
+    the Bearer token to download requests, unless the deployment uses the
+    [Workers Free tier artifact offload](configuration.md#workers-free-tier-artifact-offload)
+    with presigned URLs: the authenticated metadata endpoints then hand the CLI
+    short-lived signed R2 URLs, so vanilla `terraform`/`tofu` work in `strict`
+    mode. In `relaxed` mode the CLI works directly because artifact routes are
+    unauthenticated.
 
 See [Configuration → Registry modes](configuration.md#registry-modes) for the
 full matrix.

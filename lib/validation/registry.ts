@@ -92,6 +92,18 @@ export const moduleDownloadParams = z.object({
   version: versionSchema,
 });
 
+/** Module tarball path segments; version must already be canonical (no v prefix). */
+export const moduleTarballCoordinates = z.object({
+  namespace: namespaceSchema,
+  name: nameSchema,
+  provider: providerSchema,
+  version: z
+    .string()
+    .refine((v) => !/^[vV]/.test(v) && versionSchema.safeParse(v).success, {
+      message: "Invalid semver version",
+    }),
+});
+
 /** GET /v1/providers/:namespace/:type/versions */
 export const providerVersionsParams = z.object({
   namespace: namespaceSchema,

@@ -40,44 +40,25 @@ Navigate to: **Cloudflare Dashboard → Security → WAF → Rate Limiting Rules
 
 Documentation: https://developers.cloudflare.com/waf/rate-limiting-rules/
 
-## Alternative: Cloudflare Workers Rate Limiting API
+## Built in: Workers Rate Limiting bindings
 
-For more granular, programmatic rate limiting (e.g., per-API-key limits), Cloudflare provides a **Rate Limiting binding** that can be used directly inside Workers.
+Stellaris ships with two [Workers Rate Limiting](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/) bindings (available on Workers Free), keyed on the client IP from `CF-Connecting-IP`. `X-Forwarded-For` is never trusted, since clients can set it.
 
-### How It Works
+| Binding | Guards | Suggested limit |
+| --- | --- | --- |
+| `API_RATE_LIMITER` | Every Bearer-authenticated `/v1` request, checked **before** the D1 key lookup | 300 req / 60 s |
+| `AUTH_RATE_LIMITER` | Login and signup attempts | 10 req / 60 s |
 
-1. Define a `RateLimit` binding in `wrangler.jsonc`:
+Over the limit, the API answers `429` with `Retry-After: 60` and login/signup return a "too many attempts" error. Add both to `wrangler.jsonc` (see `wrangler.example.jsonc`):
 
-   ```jsonc
-   {
-     "rate_limits": [
-       {
-         "binding": "RATE_LIMITER",
-         "namespace_id": "1001",
-         "simple": {
-           "limit": 10,
-           "period": 60,
-         },
-       },
-     ],
-   }
-   ```
+```jsonc
+"ratelimits": [
+  { "name": "API_RATE_LIMITER", "namespace_id": "1001", "simple": { "limit": 300, "period": 60 } },
+  { "name": "AUTH_RATE_LIMITER", "namespace_id": "1002", "simple": { "limit": 10, "period": 60 } }
+]
+```
 
-2. Use the binding in a route handler:
-
-   ```typescript
-   const { success } = await env.RATE_LIMITER.limit({
-     key: clientIdentifier, // e.g., IP address or API key ID
-   });
-
-   if (!success) {
-     return new Response("Too Many Requests", { status: 429 });
-   }
-   ```
-
-This approach runs inside the Worker but uses Cloudflare's distributed rate limiting infrastructure — no shared memory needed.
-
-Documentation: https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/
+Limits apply per Cloudflare location and are approximate. Without the bindings (for example under `pnpm dev`), requests are not limited. WAF rules above still help, because they stop traffic before the Worker runs.
 
 ## API Key Endpoint Considerations
 

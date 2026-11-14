@@ -52,5 +52,6 @@ export async function offloadedArtifact(key: string): Promise<Response | null> {
     }
     return null;
   }
-  return Response.redirect(url, 307);
+  // Presigned URLs expire, so the redirect itself must not be cached.
+  return new Response(null, { status: 307, headers: { Location: url, "Cache-Control": "no-store" } });
 }

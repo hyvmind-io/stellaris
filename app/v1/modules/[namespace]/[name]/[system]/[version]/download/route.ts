@@ -2,7 +2,8 @@ import type { NextRequest } from "next/server";
 import { moduleDownloadParams } from "@/lib/validation/registry";
 import { notFound, validationError, internalError } from "@/lib/api/errors";
 import { moduleDownloadResponse } from "@/lib/api/response";
-import { resolveModule } from "@/lib/data/modules";
+import { incrementModuleDownloads, resolveModule } from "@/lib/data/modules";
+import { artifactUrl, isWorkersFreeTier } from "@/lib/storage/artifact-url";
 import { resolveCanonicalModuleCoordinates } from "@/lib/data/aliases";
 import { requireAuth } from "@/lib/auth/middleware";
 import { proxyModuleJson } from "@/lib/upstream/proxy";
@@ -58,8 +59,25 @@ export async function GET(
     );
 
     if (moduleRecord) {
-      const location = `/v1/modules/tarball/${moduleRecord.location}`;
-      return moduleDownloadResponse(location);
+      // Best-effort: the counter must never fail the download.
+      try {
+        await incrementModuleDownloads(
+          moduleRecord.namespace,
+          moduleRecord.name,
+          moduleRecord.provider,
+          moduleRecord.version,
+        );
+      } catch (counterError) {
+        console.warn("Module download counter update failed:", counterError);
+      }
+
+      const tarballPath = `/v1/modules/tarball/${moduleRecord.location}`;
+      // Free tier: hand the CLI the R2 URL directly so no bytes cross the Worker.
+      const offloaded =
+        isWorkersFreeTier() && moduleRecord.location
+          ? await artifactUrl(moduleRecord.location)
+          : null;
+      return moduleDownloadResponse(offloaded ?? tarballPath);
     }
 
     // Upstream fallback — proxy the download response

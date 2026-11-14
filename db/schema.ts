@@ -248,18 +248,6 @@ export const sessions = sqliteTable(
 export type Session = typeof sessions.$inferSelect;
 
 // ============================================================================
-// Rate Limits
-// ============================================================================
-
-export const rateLimits = sqliteTable("rate_limits", {
-  key: text("key").primaryKey(), // e.g., "login:email:user@example.com"
-  count: integer("count").notNull().default(0),
-  windowStart: integer("window_start", { mode: "timestamp" })
-    .notNull()
-    .$defaultFn(() => new Date()),
-});
-
-// ============================================================================
 // System Settings
 // ============================================================================
 

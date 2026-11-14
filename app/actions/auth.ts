@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { eq, count } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { users, rateLimits } from "@/db/schema";
+import { users } from "@/db/schema";
 import { getUserByEmail, createUser } from "@/lib/auth/user";
 import { updateLastLogin } from "@/lib/data/users";
 import { verifyPassword, dummyVerify } from "@/lib/auth/password";
@@ -17,6 +17,7 @@ import { getAuth } from "@/lib/auth/get-auth";
 import { loginSchema, signupSchema } from "@/lib/validation/auth";
 import { isSignupEnabled } from "@/lib/data/settings";
 import { isCfAccessEnabled } from "@/lib/auth/cf-access-config";
+import { allowRequest, clientIp } from "@/lib/security/rate-limit";
 
 // ============================================================================
 // Types
@@ -31,60 +32,8 @@ export interface ActionState {
 // Helpers
 // ============================================================================
 
-const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-
-/**
- * D1-based fixed-window rate limiter.
- * Returns true if the request is allowed, false if rate-limited.
- */
-async function checkRateLimit(
-  key: string,
-  maxAttempts: number,
-): Promise<boolean> {
-  const db = getDb();
-  const now = new Date();
-  const existing = await db
-    .select()
-    .from(rateLimits)
-    .where(eq(rateLimits.key, key))
-    .get();
-
-  // No record or window expired → reset with count=1
-  if (
-    !existing ||
-    now.getTime() - existing.windowStart.getTime() >= RATE_LIMIT_WINDOW_MS
-  ) {
-    await db
-      .insert(rateLimits)
-      .values({ key, count: 1, windowStart: now })
-      .onConflictDoUpdate({
-        target: rateLimits.key,
-        set: { count: 1, windowStart: now },
-      });
-    return true;
-  }
-
-  // Rate limit exceeded
-  if (existing.count >= maxAttempts) {
-    return false;
-  }
-
-  // Increment count
-  await db
-    .update(rateLimits)
-    .set({ count: existing.count + 1 })
-    .where(eq(rateLimits.key, key));
-
-  return true;
-}
-
-async function getClientIp(): Promise<string> {
-  const headersList = await headers();
-  return (
-    headersList.get("CF-Connecting-IP") ??
-    headersList.get("X-Forwarded-For")?.split(",")[0]?.trim() ??
-    "unknown"
-  );
+async function allowAuthAttempt(action: "login" | "signup"): Promise<boolean> {
+  return allowRequest("AUTH_RATE_LIMITER", `${action}:${clientIp(await headers())}`);
 }
 
 // ============================================================================
@@ -110,10 +59,7 @@ export async function loginAction(
 
   const { email, password } = parsed.data;
 
-  // Rate limit by IP + email
-  const ip = await getClientIp();
-  const allowed = await checkRateLimit(`login:${ip}:${email}`, 10);
-  if (!allowed) {
+  if (!(await allowAuthAttempt("login"))) {
     return { error: "Too many login attempts. Please try again later." };
   }
 
@@ -177,10 +123,7 @@ export async function signupAction(
 
   const { email, username, password } = parsed.data;
 
-  // Rate limit by IP
-  const ip = await getClientIp();
-  const allowed = await checkRateLimit(`signup:${ip}`, 5);
-  if (!allowed) {
+  if (!(await allowAuthAttempt("signup"))) {
     return { error: "Too many signup attempts. Please try again later." };
   }
 

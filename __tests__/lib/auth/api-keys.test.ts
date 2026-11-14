@@ -197,6 +197,40 @@ describe("validateApiKey", () => {
     );
   });
 
+  it("skips the lastUsedAt write when the key was used within the hour", async () => {
+    const testKey = "stlr_recent";
+    mockGet.mockResolvedValue({
+      id: 5,
+      keyHash: await hashApiKey(testKey),
+      name: "recent-key",
+      description: null,
+      permissions: null,
+      createdAt: new Date(),
+      lastUsedAt: new Date(Date.now() - 59 * 60 * 1000),
+      expiresAt: null,
+    });
+
+    expect(await validateApiKey(testKey)).not.toBeNull();
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it("writes lastUsedAt again once an hour has passed", async () => {
+    const testKey = "stlr_stale";
+    mockGet.mockResolvedValue({
+      id: 6,
+      keyHash: await hashApiKey(testKey),
+      name: "stale-key",
+      description: null,
+      permissions: null,
+      createdAt: new Date(),
+      lastUsedAt: new Date(Date.now() - 60 * 60 * 1000),
+      expiresAt: null,
+    });
+
+    await validateApiKey(testKey);
+    expect(mockUpdate).toHaveBeenCalled();
+  });
+
   it("still returns record when lastUsedAt update fails", async () => {
     const testKey = "stlr_updatefail";
     const expectedHash = await hashApiKey(testKey);
